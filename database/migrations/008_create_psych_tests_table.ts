@@ -3,33 +3,26 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
 export default class extends BaseSchema {
   protected tableName = 'psych_tests'
 
-  async up() {
-    this.schema.createTable(this.tableName, (t) => {
-      t.increments('id')
+  public async up() {
+    this.schema.alterTable(this.tableName, (t) => {
+      // Link público para que el candidato conteste el examen (sin login)
+      t.string('access_token', 64).nullable()
 
-      t.integer('candidate_id')
-        .unsigned()
-        .notNullable()
-        .references('id')
-        .inTable('candidates')
-        .onDelete('CASCADE')
-        .index()
+      // Respuestas del candidato y reporte IA (MySQL JSON)
+      t.json('answers_json').nullable()
+      t.json('ai_report_json').nullable()
 
-      t.string('test_name', 120).notNullable() // p.ej. 'DISC' o 'Bondad100'
-      t.timestamp('assigned_at', { useTz: true }).notNullable().defaultTo(this.now())
-      t.timestamp('taken_at', { useTz: true }).nullable()
-
-      t.decimal('score', 6, 2).nullable()
-      t.boolean('passed').nullable()
-      t.string('report_url', 500).nullable()
-      t.text('notes').nullable()
-
-      t.timestamp('created_at', { useTz: true }).defaultTo(this.now())
-      t.timestamp('updated_at', { useTz: true }).defaultTo(this.now())
+      // Índice único (nombre explícito para poder dropear en down)
+      t.unique(['access_token'], 'uk_psych_tests_access_token')
     })
   }
 
-  async down() {
-    this.schema.dropTable(this.tableName)
+  public async down() {
+    this.schema.alterTable(this.tableName, (t) => {
+      t.dropUnique(['access_token'], 'uk_psych_tests_access_token')
+      t.dropColumn('access_token')
+      t.dropColumn('answers_json')
+      t.dropColumn('ai_report_json')
+    })
   }
 }

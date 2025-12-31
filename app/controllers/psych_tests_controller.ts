@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import PsychTest from '#models/psych_test'
 import Candidate from '#models/candidate'
 import { setStageTx } from '#services/stage_service'
+import { makePublicToken } from '#services/public_token'
 
 export default class PsychTestsController {
   // POST /api/candidates/:id/psych-tests
@@ -12,12 +13,14 @@ export default class PsychTestsController {
     if (!c) return response.notFound({ error: 'Candidate not found' })
 
     const payload = request.only(['testName', 'assignedAt', 'notes'])
+
     const test = await PsychTest.create({
       candidateId,
       testName: payload.testName,
       assignedAt: payload.assignedAt
         ? DateTime.fromISO(String(payload.assignedAt))
         : DateTime.now(),
+      accessToken: makePublicToken(),
       notes: payload.notes ?? null,
     })
 

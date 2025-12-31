@@ -10,7 +10,12 @@ const CandidateAddressMediaController = () =>
 const InterviewsController = () => import('#controllers/interviews_controller')
 const PsychTestsController = () => import('#controllers/psych_tests_controller')
 const OffersController = () => import('#controllers/offers_controller')
+const PublicController = () => import('#controllers/public_controller')
+
 const PreviousJobsController = () => import('#controllers/previous_jobs_controller')
+const PublicApplyFullController = () => import('#controllers/public_apply_full_controller')
+const PublicPracticalTestsController = () =>
+  import('#controllers/public_practical_tests_controller')
 
 // Health simple para DB
 router.get('/health-db', async () => {
@@ -50,9 +55,21 @@ router
     router.patch('/psych-tests/:id/result', [PsychTestsController, 'result'])
 
     // ───────── OFFERS ─────────
+    // ───────── OFFERS ─────────
     router.post('/candidates/:id/offers', [OffersController, 'store'])
     router.patch('/offers/:id', [OffersController, 'update'])
 
+    // ───────── PUBLIC (sin auth) ─────────
+    router.post('/public/apply', [PublicController, 'apply'])
+    router.get('/public/psych-tests/:token', [PublicController, 'psychShow'])
+    router.post('/public/psych-tests/:token/submit', [PublicController, 'psychSubmit'])
+    router.get('/public/offers/:token', [PublicController, 'offerShow'])
+    router.post('/public/offers/:token/respond', [PublicController, 'offerRespond'])
+
+    router.post('/public/apply-full', [PublicApplyFullController, 'apply'])
+    router.get('/public/practical-tests/:token', [PublicPracticalTestsController, 'show'])
+    router.post('/public/practical-tests/:token/submit', [PublicPracticalTestsController, 'submit'])
+    router.get('/candidates/:id/practical-tests', [PublicPracticalTestsController, 'index'])
     // ───────── PREVIOUS JOBS ─────────
     router.post('/candidates/:id/previous-jobs', [PreviousJobsController, 'store'])
     router.get('/candidates/:id/previous-jobs', [PreviousJobsController, 'list'])
