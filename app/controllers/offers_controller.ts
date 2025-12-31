@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Offer from '#models/offer'
 import Candidate from '#models/candidate'
 import { setStageTx } from '#services/stage_service'
+import { makePublicToken } from '#services/public_token'
 
 export default class OffersController {
   // POST /api/candidates/:id/offers
@@ -17,12 +18,14 @@ export default class OffersController {
       'startDate',
       'notes',
     ])
+
     const offer = await Offer.create({
       candidateId,
       salaryOfferMx: body.salaryOfferMx ?? null,
       weeklyTipsOfferMx: body.weeklyTipsOfferMx ?? null,
       roleOffered: body.roleOffered ?? null,
       startDate: body.startDate ?? null,
+      publicToken: makePublicToken(),
       status: 'made',
       notes: body.notes ?? null,
     })
