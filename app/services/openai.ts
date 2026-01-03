@@ -1,10 +1,13 @@
 import OpenAI from 'openai'
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 export const GPT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+
+function getClient(): OpenAI | null {
+  if (!OPENAI_API_KEY) return null
+  return new OpenAI({ apiKey: OPENAI_API_KEY })
+}
 
 function stripJsonFences(s: string) {
   const m = s.match(/```json\s*([\s\S]*?)\s*```/i)
@@ -12,7 +15,10 @@ function stripJsonFences(s: string) {
 }
 
 export async function gradeExamJson(prompt: string) {
-  const resp = await openai.chat.completions.create({
+  const client = getClient()
+  if (!client) return { note: 'OPENAI_API_KEY no configurada' }
+
+  const resp = await client.chat.completions.create({
     model: GPT_MODEL,
     messages: [
       { role: 'system', content: 'Devuelve SOLO JSON válido. Sin markdown. Sin ```.' },

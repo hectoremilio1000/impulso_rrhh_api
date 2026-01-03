@@ -58,21 +58,48 @@ export default class PublicPracticalTestsController {
 
       if (process.env.OPENAI_API_KEY) {
         const prompt = `
-Evalúa un EXAMEN PRÁCTICO para el puesto: ${test.roleCode}.
+Evalúa un EXAMEN PRÁCTICO para el puesto: ${test.roleCode} con criterio de RH senior.
 Devuelve SOLO JSON válido con esta forma EXACTA:
 {
-  "score": number,                 // 1 a 10
-  "passed": boolean,               // true si es favorable
+  "score": number,                 // 0 a 100
+  "passed": boolean,
   "summary": string,
   "strengths": string[],
   "risks": string[],
-  "recommendation": string
+  "recommendation": string,
+  "competencies": {
+    "service_protocol": number,    // 0 a 100
+    "customer_communication": number,
+    "stress_conflict": number,
+    "sales_suggestions": number,
+    "teamwork_discipline": number
+  }
 }
 
-Reglas:
-- score de 1 a 10.
-- passed = true SOLO si score >= 8.
+PESOS (total 100):
+- service_protocol: 30
+- customer_communication: 25
+- stress_conflict: 20
+- sales_suggestions: 15
+- teamwork_discipline: 10
+
+UMBRAL APTO (passed=true):
+- score global >= 82
+- service_protocol >= 70
+- customer_communication >= 70
+- ninguna competencia < 55
+
+Reglas obligatorias (prioridad alta):
+- Si MÁS de 20% de respuestas están vacías o con menos de 15 palabras, score <= 40 y summary "Respuestas insuficientes".
+- Si MENOS de 70% de respuestas incluyen pasos concretos (acción + orden + detalle técnico), score <= 50.
+- No inventes información no presente en las respuestas.
 - Sin markdown, sin \`\`\`.
+
+Guía de evaluación:
+- 90-100: pasos claros, detalle técnico y decisiones correctas.
+- 75-89: buenas respuestas con algunos vacíos.
+- 55-74: genéricas o poco técnicas.
+- <55: insuficientes.
 
 ANSWERS:
 ${JSON.stringify(answers)}
@@ -84,10 +111,8 @@ ${JSON.stringify(answers)}
         const scoreNum = Number(aiReport?.score ?? NaN)
         if (!Number.isNaN(scoreNum)) {
           test.score = scoreNum
-          // passed final siempre por regla de negocio
-          test.passed = scoreNum >= 8
+          test.passed = scoreNum >= 82
         } else {
-          // si no vino score, fallback
           test.score = null
           test.passed = null
         }

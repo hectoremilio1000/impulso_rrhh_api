@@ -113,20 +113,49 @@ export default class PublicController {
 
       if (process.env.OPENAI_API_KEY) {
         const prompt = `
-Evalúa un EXAMEN PSICOMÉTRICO para trabajo en restaurante.
+Evalúa un EXAMEN PSICOMÉTRICO para mesero(a) con criterio de RH senior.
 Devuelve SOLO JSON válido con esta forma EXACTA:
 {
-  "score": number,                 // 1 a 10
+  "score": number,                 // 0 a 100
   "summary": string,
   "strengths": string[],
   "risks": string[],
-  "recommendation": string
+  "recommendation": string,
+  "competencies": {
+    "service_protocol": number,    // 0 a 100
+    "customer_communication": number,
+    "stress_conflict": number,
+    "sales_suggestions": number,
+    "teamwork_discipline": number
+  },
+  "pass": boolean
 }
 
-Reglas:
-- score de 1 a 10.
-- Favorable si score >= 8 (pero esto NO cambia etapa).
+PESOS (total 100):
+- service_protocol: 30
+- customer_communication: 25
+- stress_conflict: 20
+- sales_suggestions: 15
+- teamwork_discipline: 10
+
+UMBRAL APTO (pass=true):
+- score global >= 82
+- service_protocol >= 70
+- customer_communication >= 70
+- ninguna competencia < 55
+
+Reglas obligatorias (prioridad alta):
+- Si MÁS de 20% de respuestas están vacías o con menos de 15 palabras, score <= 40 y summary "Respuestas insuficientes".
+- Si MENOS de 50% de respuestas contienen un ejemplo específico (situación + acción + resultado), score <= 50.
+- Si >30% de respuestas son repetidas o casi idénticas, score <= 50 y summary "Respuestas repetitivas".
+- No inventes información no presente en las respuestas.
 - Sin markdown, sin \`\`\`.
+
+Guía de evaluación:
+- 90-100: respuestas profundas, consistentes, con ejemplos reales.
+- 75-89: buenas respuestas, algunos vacíos.
+- 55-74: aceptables pero genéricas.
+- <55: insuficientes.
 
 ANSWERS:
 ${JSON.stringify(answers)}
@@ -137,7 +166,7 @@ ${JSON.stringify(answers)}
         const scoreNum = Number(aiReport?.score ?? NaN)
         if (!Number.isNaN(scoreNum)) {
           score = scoreNum
-          passed = scoreNum >= 8
+          passed = scoreNum >= 82
         }
       }
 
