@@ -73,6 +73,7 @@ export default class PublicController {
     const candidate = await Candidate.findOrFail(test.candidateId)
     return {
       ok: true,
+      alreadyTaken: !!test.takenAt,
       test: {
         id: test.id,
         testName: test.testName,
@@ -99,6 +100,12 @@ export default class PublicController {
       const token = String(params.token || '')
       const test = await PsychTest.query().where('access_token', token).first()
       if (!test) return response.notFound({ error: 'Link inválido' })
+
+      if (test.takenAt) {
+        return response
+          .status(409)
+          .send({ error: 'Esta evaluación ya fue completada', alreadyTaken: true })
+      }
 
       const answers = request.input('answers')
       if (!answers) return response.badRequest({ error: 'answers es requerido' })
