@@ -3,7 +3,7 @@ import app from '@adonisjs/core/services/app'
 import path from 'node:path'
 import Candidate from '#models/candidate'
 import CandidateCvFile from '#models/candidate_cv_file'
-import FtpCvUploader from '#services/ftp_cv_uploader'
+import CvUploader from '#services/s3_cv_uploader'
 
 export default class CandidateFilesController {
   // POST /api/candidates/:id/cv
@@ -23,7 +23,7 @@ export default class CandidateFilesController {
     await file.move(tmpDir, { name: `${Date.now()}_${file.clientName || 'cv'}` })
     const localPath = path.join(tmpDir, file.fileName!)
 
-    const url = await FtpCvUploader.upload({
+    const url = await CvUploader.upload({
       candidateId,
       localPath,
       originalName: file.clientName || file.fileName!,
