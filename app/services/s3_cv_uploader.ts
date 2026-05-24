@@ -6,7 +6,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} from '@aws-sdk/client-s3'
 
 type UploadOpts = { candidateId: number; localPath: string; originalName?: string }
 
@@ -70,18 +75,66 @@ export default class S3CvUploader {
     const relativePath = `candidates/cv/${candidateId}/${fileName}`
     const key = prefix ? `${prefix}/${relativePath}` : relativePath
 
+    // Put + verify con reintentos. Tigris/Railway puede dar "ack" a un Put que
+    // no persiste (Put fantasma) → fila huérfana apuntando a 404. Confirmamos
+    // con HeadObject; si falla, reintentamos hasta MAX_ATTEMPTS con backoff
+    // corto. Si agota los intentos, lanza (→ 500) — no escondemos un outage
+    // real de Tigris ni dejamos loop infinito.
+    const MAX_ATTEMPTS = 3
+    let lastErr: any = null
     try {
       const body = fs.readFileSync(localPath)
       const client = getClient()
-      await client.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: body,
-          ContentType: contentTypeFromExt(safeExt),
-          CacheControl: 'public, max-age=31536000, immutable',
-        })
-      )
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          await client.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: key,
+              Body: body,
+              ContentType: contentTypeFromExt(safeExt),
+              CacheControl: 'public, max-age=31536000, immutable',
+            })
+          )
+          // Verifica que el objeto realmente aterrizó (cubre el Put fantasma).
+          await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))
+          lastErr = null
+          break
+        } catch (err: any) {
+          lastErr = err
+          console.error(
+            JSON.stringify({
+              event: 'cv_upload',
+              status: 'retry',
+              attempt,
+              maxAttempts: MAX_ATTEMPTS,
+              bucket,
+              key,
+              errorName: err?.name,
+              errorMessage: err?.message,
+            })
+          )
+          if (attempt < MAX_ATTEMPTS) {
+            await new Promise((resolve) => setTimeout(resolve, 300 * attempt))
+          }
+        }
+      }
+
+      if (lastErr) {
+        console.error(
+          JSON.stringify({
+            event: 'cv_upload',
+            status: 'failed',
+            attempts: MAX_ATTEMPTS,
+            bucket,
+            key,
+            errorName: lastErr?.name,
+            errorMessage: lastErr?.message,
+          })
+        )
+        throw new Error(`s3_upload_verify_failed after ${MAX_ATTEMPTS} attempts: ${key}`)
+      }
     } finally {
       try {
         fs.unlinkSync(localPath)
