@@ -39,4 +39,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   FTPS_CV_PASS: Env.schema.string.optional(),
   FTPS_CV_SECURE: Env.schema.boolean.optional(), // "true"/"false" en .env
   MEDIA_BASE_URL: Env.schema.string.optional(), // p.ej. "https://media.impulsorestaurantero.com/cvs"
+
+  /* ---------- S3-compatible (Railway Tigris) ---------- */
+  S3_ENDPOINT: Env.schema.string.optional(),
+  S3_REGION: Env.schema.string.optional(),
+  S3_BUCKET: Env.schema.string.optional(),
+  S3_ACCESS_KEY_ID: Env.schema.string.optional(),
+  S3_SECRET_ACCESS_KEY: Env.schema.string.optional(),
 })
