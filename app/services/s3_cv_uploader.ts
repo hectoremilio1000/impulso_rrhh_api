@@ -6,7 +6,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} from '@aws-sdk/client-s3'
 
 type UploadOpts = { candidateId: number; localPath: string; originalName?: string }
 
@@ -82,6 +87,24 @@ export default class S3CvUploader {
           CacheControl: 'public, max-age=31536000, immutable',
         })
       )
+
+      // Verify the object actually landed in the bucket. Without this, a Put
+      // that resolves without throwing but doesn't persist (Tigris/Railway can
+      // ack a partial write) leaves a DB row pointing to a 404 forever.
+      // Same guard as s3_menu_uploader.
+      await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))
+    } catch (err: any) {
+      console.error(
+        JSON.stringify({
+          event: 'cv_upload',
+          status: 'error',
+          bucket,
+          key,
+          errorName: err?.name,
+          errorMessage: err?.message,
+        })
+      )
+      throw new Error(`s3_upload_verify_failed: ${key}`)
     } finally {
       try {
         fs.unlinkSync(localPath)
