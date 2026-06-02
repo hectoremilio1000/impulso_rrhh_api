@@ -15,6 +15,7 @@ function roleToCode(desiredRole: string): string {
   if (v === 'cocinero') return 'cook'
   if (v === 'barman' || v === 'bartender') return 'barman'
   if (v === 'chef gerente' || v === 'chef_gerente') return 'chef_manager'
+  if (v === 'subgerente') return 'assistant_manager'
   return 'waiter'
 }
 
