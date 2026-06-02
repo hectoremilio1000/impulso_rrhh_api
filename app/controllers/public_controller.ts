@@ -1,11 +1,18 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
+import logger from '@adonisjs/core/services/logger'
 import { gradeExamJson } from '#services/openai'
 import PsychTest from '#models/psych_test'
 import Candidate from '#models/candidate'
 import Stage from '#models/stage'
 import Offer from '#models/offer'
 import { setStageTx } from '#services/stage_service'
+
+// Lista blanca de puestos en español (espejo del label de ROLE_OPTIONS del frontend).
+// Si agregas un puesto nuevo, debe agregarse aquí Y en roleToCode() de
+// public_apply_full_controller.ts. PR D (role_thresholds en DB) consolidará
+// esta lista en una sola fuente de verdad.
+const VALID_ROLES_ES = ['Mesero', 'Capitán', 'Cocinero', 'Barman', 'Chef gerente', 'Subgerente']
 
 /**
  * MVP: sin auth.
@@ -110,6 +117,19 @@ export default class PublicController {
       const answers = request.input('answers')
       if (!answers) return response.badRequest({ error: 'answers es requerido' })
 
+      // Cargar candidato para construir un prompt rol-específico.
+      // Whitelistea desiredRole contra VALID_ROLES_ES — defensa contra prompt
+      // injection si el campo dejara de venir de un Select controlado.
+      const candidate = await Candidate.findOrFail(test.candidateId)
+      const raw = (candidate.desiredRole || '').trim()
+      const role = VALID_ROLES_ES.includes(raw) ? raw : 'Mesero'
+      if (raw && !VALID_ROLES_ES.includes(raw)) {
+        logger.warn(
+          { candidateId: candidate.id, raw },
+          'Unknown desiredRole on psychSubmit, falling back to Mesero'
+        )
+      }
+
       // Guardar respuestas SIEMPRE
       test.takenAt = DateTime.now()
       test.answersJson = answers
@@ -120,7 +140,7 @@ export default class PublicController {
 
       if (process.env.OPENAI_API_KEY) {
         const prompt = `
-Evalúa un EXAMEN PSICOMÉTRICO para mesero(a) con criterio de RH senior.
+Evalúa un EXAMEN PSICOMÉTRICO para ${role} con criterio de RH senior.
 Devuelve SOLO JSON válido con esta forma EXACTA:
 {
   "score": number,                 // 0 a 100
