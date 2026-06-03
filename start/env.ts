@@ -46,4 +46,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   S3_BUCKET: Env.schema.string.optional(),
   S3_ACCESS_KEY_ID: Env.schema.string.optional(),
   S3_SECRET_ACCESS_KEY: Env.schema.string.optional(),
+
+  /* ---------- Admin gate (temp, Fase 1 cierre PII) ---------- */
+  ADMIN_GATE_TOKEN: Env.schema.string.optional(),
 })
