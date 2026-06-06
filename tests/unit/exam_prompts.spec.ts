@@ -2,6 +2,7 @@ import { test } from '@japa/runner'
 import {
   buildPromptLegacy,
   buildPromptGuidaraSubgerente,
+  buildPromptGuidaraMesero,
   buildPsychPrompt,
 } from '#services/exam_prompts'
 
@@ -180,11 +181,13 @@ test.group('buildPsychPrompt selector', () => {
     assert.notInclude(prompt, 'Evalúa un EXAMEN PSICOMÉTRICO para Subgerente con criterio de RH senior.\nDevuelve SOLO JSON')
   })
 
-  test('Mesero recibe el prompt legacy', ({ assert }) => {
+  test('Mesero recibe el prompt Guidara (post-PR M2)', ({ assert }) => {
     const prompt = buildPsychPrompt('Mesero', sampleAnswers)
-    assert.notInclude(prompt, 'competenciesGuidara')
-    assert.include(prompt, 'para Mesero con criterio de RH senior')
-    assert.include(prompt, 'service_protocol')
+    assert.include(prompt, 'competenciesGuidara')
+    assert.include(prompt, 'EQUIPO LATERAL')
+    assert.include(prompt, 'TAGGING — qué eje mide cada pregunta del banco Mesero')
+    assert.include(prompt, 'q37 → optimismo_bondadoso')
+    assert.notInclude(prompt, 'q45')
   })
 
   test('Capitán recibe el prompt legacy con el rol correcto', ({ assert }) => {
@@ -225,5 +228,49 @@ test.group('builders aislados', () => {
     ]) {
       assert.include(prompt, eje, `falta el eje ${eje}`)
     }
+  })
+
+  test('buildPromptGuidaraMesero incluye los 37 tags q1..q37 y NO tiene q38..q45', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraMesero({})
+    for (let i = 1; i <= 37; i++) {
+      // q1 .. q9 tienen doble espacio para alinearse visualmente con q10..q37.
+      const re = new RegExp(`\\bq${i}\\s+→`)
+      assert.match(prompt, re, `falta el tag de q${i}`)
+    }
+    for (let i = 38; i <= 45; i++) {
+      const re = new RegExp(`\\bq${i}\\s+→`)
+      assert.notMatch(prompt, re, `q${i} no debería estar en el banco Mesero (37 preguntas)`)
+    }
+  })
+
+  test('buildPromptGuidaraMesero nombra los 6 ejes humanos + conocimientos_practicos', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraMesero({})
+    for (const eje of [
+      'optimismo_bondadoso',
+      'inteligencia_curiosa',
+      'etica_trabajo',
+      'empatia',
+      'autoconciencia',
+      'integridad',
+      'conocimientos_practicos',
+    ]) {
+      assert.include(prompt, eje, `falta el eje ${eje}`)
+    }
+  })
+
+  test('buildPromptGuidaraMesero refleja contexto del rol mesero (no del subgerente)', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraMesero({})
+    assert.include(prompt, 'para Mesero con criterio de RH senior')
+    assert.include(prompt, 'EQUIPO LATERAL')
+    assert.include(prompt, 'NO supervisa')
+    assert.include(prompt, 'q34, q35, q36, q37')
+    assert.notInclude(prompt, 'mando medio operativo')
+    assert.notInclude(prompt, 'caja básica')
   })
 })
