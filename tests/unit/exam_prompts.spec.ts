@@ -4,6 +4,7 @@ import {
   buildPromptGuidaraSubgerente,
   buildPromptGuidaraMesero,
   buildPromptGuidaraCapitan,
+  buildPromptGuidaraBarman,
   buildPsychPrompt,
 } from '#services/exam_prompts'
 
@@ -199,6 +200,15 @@ test.group('buildPsychPrompt selector', () => {
     assert.include(prompt, 'q40 → integridad')
     assert.notInclude(prompt, 'q41')
   })
+
+  test('Barman recibe el prompt Guidara (post-PR B2)', ({ assert }) => {
+    const prompt = buildPsychPrompt('Barman', sampleAnswers)
+    assert.include(prompt, 'competenciesGuidara')
+    assert.include(prompt, 'DIMENSIÓN MORAL ELEVADA')
+    assert.include(prompt, 'TAGGING — qué eje mide cada pregunta del banco Barman')
+    assert.include(prompt, 'q25 → integridad')
+    assert.notInclude(prompt, 'q26')
+  })
 })
 
 test.group('builders aislados', () => {
@@ -320,5 +330,50 @@ test.group('builders aislados', () => {
     assert.include(prompt, 'q4, q11, q18, q26, q34')
     assert.notInclude(prompt, 'EQUIPO LATERAL')
     assert.notInclude(prompt, 'mando medio operativo')
+  })
+
+  test('buildPromptGuidaraBarman incluye los 25 tags q1..q25 y NO tiene q26..q45', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraBarman({})
+    for (let i = 1; i <= 25; i++) {
+      const re = new RegExp(`\\bq${i}\\s+→`)
+      assert.match(prompt, re, `falta el tag de q${i}`)
+    }
+    for (let i = 26; i <= 45; i++) {
+      const re = new RegExp(`\\bq${i}\\s+→`)
+      assert.notMatch(prompt, re, `q${i} no debería estar en el banco Barman (25 preguntas)`)
+    }
+  })
+
+  test('buildPromptGuidaraBarman nombra los 6 ejes humanos + conocimientos_practicos', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraBarman({})
+    for (const eje of [
+      'optimismo_bondadoso',
+      'inteligencia_curiosa',
+      'etica_trabajo',
+      'empatia',
+      'autoconciencia',
+      'integridad',
+      'conocimientos_practicos',
+    ]) {
+      assert.include(prompt, eje, `falta el eje ${eje}`)
+    }
+  })
+
+  test('buildPromptGuidaraBarman refleja contexto del rol barman (aislamiento + dinero+alcohol, no mando ni mesa)', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraBarman({})
+    assert.include(prompt, 'para Barman con criterio de RH senior')
+    assert.include(prompt, 'DIMENSIÓN MORAL ELEVADA')
+    assert.include(prompt, 'MAYOR exposición directa a dinero líquido + alcohol')
+    assert.include(prompt, '60 centímetros')
+    assert.include(prompt, 'MOTOR DE BARRA')
+    assert.include(prompt, 'EJE DE MAYOR EXPOSICIÓN')
+    assert.notInclude(prompt, 'EQUIPO LATERAL')
+    assert.notInclude(prompt, 'MANDO OPERATIVO')
   })
 })
