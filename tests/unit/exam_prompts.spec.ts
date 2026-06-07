@@ -3,6 +3,7 @@ import {
   buildPromptLegacy,
   buildPromptGuidaraSubgerente,
   buildPromptGuidaraMesero,
+  buildPromptGuidaraCapitan,
   buildPsychPrompt,
 } from '#services/exam_prompts'
 
@@ -190,10 +191,13 @@ test.group('buildPsychPrompt selector', () => {
     assert.notInclude(prompt, 'q45')
   })
 
-  test('Capitán recibe el prompt legacy con el rol correcto', ({ assert }) => {
+  test('Capitán recibe el prompt Guidara (post-PR Cp2)', ({ assert }) => {
     const prompt = buildPsychPrompt('Capitán', sampleAnswers)
-    assert.notInclude(prompt, 'competenciesGuidara')
-    assert.include(prompt, 'para Capitán con criterio de RH senior')
+    assert.include(prompt, 'competenciesGuidara')
+    assert.include(prompt, 'MANDO OPERATIVO')
+    assert.include(prompt, 'TAGGING — qué eje mide cada pregunta del banco Capitán')
+    assert.include(prompt, 'q40 → integridad')
+    assert.notInclude(prompt, 'q41')
   })
 })
 
@@ -272,5 +276,49 @@ test.group('builders aislados', () => {
     assert.include(prompt, 'q34, q35, q36, q37')
     assert.notInclude(prompt, 'mando medio operativo')
     assert.notInclude(prompt, 'caja básica')
+  })
+
+  test('buildPromptGuidaraCapitan incluye los 40 tags q1..q40 y NO tiene q41..q45', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraCapitan({})
+    for (let i = 1; i <= 40; i++) {
+      const re = new RegExp(`\\bq${i}\\s+→`)
+      assert.match(prompt, re, `falta el tag de q${i}`)
+    }
+    for (let i = 41; i <= 45; i++) {
+      const re = new RegExp(`\\bq${i}\\s+→`)
+      assert.notMatch(prompt, re, `q${i} no debería estar en el banco Capitán (40 preguntas)`)
+    }
+  })
+
+  test('buildPromptGuidaraCapitan nombra los 6 ejes humanos + conocimientos_practicos', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraCapitan({})
+    for (const eje of [
+      'optimismo_bondadoso',
+      'inteligencia_curiosa',
+      'etica_trabajo',
+      'empatia',
+      'autoconciencia',
+      'integridad',
+      'conocimientos_practicos',
+    ]) {
+      assert.include(prompt, eje, `falta el eje ${eje}`)
+    }
+  })
+
+  test('buildPromptGuidaraCapitan refleja contexto del rol capitán (no del mesero ni subgerente)', ({
+    assert,
+  }) => {
+    const prompt = buildPromptGuidaraCapitan({})
+    assert.include(prompt, 'para Capitán con criterio de RH senior')
+    assert.include(prompt, 'MANDO OPERATIVO')
+    assert.include(prompt, 'NO maneja caja')
+    assert.include(prompt, 'q3, q9, q15, q21, q27, q32, q38')
+    assert.include(prompt, 'q4, q11, q18, q26, q34')
+    assert.notInclude(prompt, 'EQUIPO LATERAL')
+    assert.notInclude(prompt, 'mando medio operativo')
   })
 })
