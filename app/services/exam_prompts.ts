@@ -685,6 +685,217 @@ ${JSON.stringify(answers)}
 `.trim()
 }
 
+export function buildPromptGuidaraBarman(answers: unknown): string {
+  return `
+Evalúa un EXAMEN PSICOMÉTRICO para Barman con criterio de RH senior.
+
+CONTEXTO DEL PUESTO
+El Barman es OPERATIVO de barra con DIMENSIÓN MORAL ELEVADA. NO es mando: no dirige meseros como capitán, no maneja caja del cierre administrativo como subgerente, no toma la orden round-trip como mesero. Su rol es ejecutor único de su estación: detrás de una barra, cara al cliente a CORTA DISTANCIA (la barra es estructura fija, no hay escape físico al salón como sí tiene el mesero). Tiene la MAYOR exposición directa a dinero líquido + alcohol + propinas de los 6 puestos del piso. Su valor está en seis cosas: (a) ejecución técnica de cócteles bajo presión sostenida — mantener recetas, tiempos y calidad cuando se llena la barra con 10+ tickets colgados, meseros gritando y cliente directo pidiendo; (b) integridad operativa con tentación directa — manejo de propinas sin testigo, cobro directo en efectivo, cortesías, política ante compañero que ofrece probar el trago del cliente o que llega a cubrir turno con copas; (c) motor de la barra — sostener el ambiente cuando hay un solo cliente sentado durante 2 horas, levantar un happy hour aburrido sin gente, vender un cóctel premium con sugerencia genuina sin presionar; (d) lectura del cliente a 60 centímetros — distinguir al cliente que viene a desahogarse del que viene a divertirse, leer al cliente difícil que está pasado vs el insistente, sin posibilidad de esconderse; (e) coordinación con piso y cocina sin escalar — cuando un mesero pasa un pedido mal, cuando cocina reclama por un trago que tardó, cuando un compañero de barra está lento; (f) protección de la experiencia del cliente bajo presión propia — llegar al turno con mal día personal y no poder esconderse del cliente que está a 60 cm.
+
+FORMATO DE RESPUESTA
+Devuelves SOLO JSON válido. Sin markdown, sin \`\`\` wrappers, sin texto adicional fuera del JSON. La forma EXACTA es:
+
+{
+  "score": number,
+  "summary": string,
+  "strengths": string[],
+  "risks": string[],
+  "recommendation": string,
+  "competencies": {
+    "service_protocol": number,
+    "customer_communication": number,
+    "stress_conflict": number,
+    "sales_suggestions": number,
+    "teamwork_discipline": number
+  },
+  "competenciesGuidara": {
+    "optimismo_bondadoso":      { "score": number, "evidence": string },
+    "inteligencia_curiosa":     { "score": number, "evidence": string },
+    "etica_trabajo":            { "score": number, "evidence": string },
+    "empatia":                  { "score": number, "evidence": string },
+    "autoconciencia":           { "score": number, "evidence": string },
+    "integridad":               { "score": number, "evidence": string },
+    "conocimientos_practicos":  { "score": null, "evidence": "evaluado en el examen práctico" }
+  },
+  "pass": boolean
+}
+
+CÁLCULO DEL BLOQUE "competencies" (5 ejes viejos — intactos)
+Mismo cálculo de siempre. Cada eje 0-100.
+
+PESOS (suma 100):
+- service_protocol: 30
+- customer_communication: 25
+- stress_conflict: 20
+- sales_suggestions: 15
+- teamwork_discipline: 10
+
+El campo "score" raíz se calcula como el promedio ponderado de los 5 ejes anteriores. NO uses competenciesGuidara para calcular "score".
+
+UMBRAL APTO (pass=true):
+- score global >= 82
+- service_protocol >= 70
+- customer_communication >= 70
+- ninguna competencia < 55
+
+CÁLCULO DEL BLOQUE "competenciesGuidara" (7 ejes nuevos)
+Cada eje humano tiene un set fijo de preguntas asignadas (ver TAGGING). Para cada eje:
+1. Identifica las preguntas asignadas al eje (lista abajo).
+2. Lee las respuestas correspondientes del candidato.
+3. Califica de 0 a 100 según cómo esas respuestas reflejan la dimensión del eje (ver DEFINICIONES OPERATIVAS).
+4. Escoge UNA respuesta del candidato que más sustente el score y ponla en "evidence" como cita literal — máximo 25 palabras, si es más larga recorta con [...] al final. Aplica las reglas de escape de caracteres (ver REGLAS OBLIGATORIAS).
+
+Para "conocimientos_practicos":
+  score = null
+  evidence = "evaluado en el examen práctico"
+(Este eje pertenece al examen práctico, no al psicométrico.)
+
+DEFINICIONES OPERATIVAS DE LOS 7 EJES
+
+optimismo_bondadoso
+  Energía protectora detrás de la barra. Sostener el ambiente cuando hay un solo cliente sentado 2 horas, levantar un happy hour aburrido sin que nadie te lo pida, vender un cóctel premium con sugerencia genuina sin presión vacía. Llegar a un turno con mal día personal y proteger al cliente que está a 60 cm del estado propio (no hay salón donde esconderse). Aportar algo distinto a un turno cuando es turno donde el barman es la diferencia entre que el cliente regrese o no.
+
+inteligencia_curiosa
+  Ganas de aprender recetas nuevas y adaptarse a contexto cambiante en vivo. Aprender un cóctel nuevo del menú haciendo preguntas, no quedándote con la indicación seca. Resolver con criterio cuando se acaba un destilado clave a media operación con clientes ya con pedido. Reaccionar bien cuando un cliente pide algo off-menu o que el barman nunca ha hecho — preguntar, improvisar con honestidad, o decir que no con dignidad.
+
+etica_trabajo
+  Disciplina sostenida. Cerrar la estación de barra con limpieza, rotación de inventario y herramientas listas para mañana, aunque sea tarde y nadie verifique. Manejar el handoff al siguiente turno con responsabilidad — el compañero del día siguiente abre la barra encontrando o no encontrando lo que tú dejaste. Recuperar el ritmo cuando llegaste tarde, sin tirar el turno entero por la frustración de haber empezado mal.
+
+empatia
+  Lectura del cliente difícil a 60 cm y del compañero en pleno turno. Manejar al cliente difícil sin perder la calma ni perder al cliente — el que insiste con algo que no funciona, el que está pasado, el que pide rehacer 3 veces. Resolver problemas operativos directamente con un mesero sin escalar al gerente. Manejar la conversación cuando cocina o piso reclaman algo de la barra sin convertirlo en pelea. Detectar que el compañero de barra está lento y decidir si le dices algo o cargas con su parte.
+
+autoconciencia
+  Reconocer cómo TU estado afecta tu ejecución en barra y al cliente a 60 cm de distancia. Identificar en pleno servicio que estás perdiendo el ritmo (10+ tickets colgados) y retomarlo. Procesar correcciones públicas (chef, gerente, capitán, mesero senior) sin tronar al que corrige ni al cliente que está mirando. Detectar cansancio o frustración propia antes de que se manifieste en un trago mal hecho o en mal trato. Reconocer cuándo tú mismo eres parte del problema.
+
+integridad
+  Hacer lo correcto sin supervisión y con tentación directa. Honestidad ante dinero líquido — corte de propinas con dinero a favor sin testigo, cambio del cliente que se fue sin esperar, cortesías otorgadas. Honestidad ante alcohol — compañero que ofrece probar el trago del cliente, compañero que llega a cubrir turno con copas. Honestidad ante el error operativo propio — el cóctel mal hecho sin que nadie haya notado. Política ante el compañero que pasa algo mal: trago no cobrado, propina mal repartida, cortesía sin autorizar.
+
+conocimientos_practicos
+  Saber técnico específico del puesto (mise en place, recetas estandarizadas, control de mermas, porcionado de destilados, manejo de inventario en barra, cierre de estación). NO se evalúa aquí — pertenece al examen práctico.
+
+TAGGING — qué eje mide cada pregunta del banco Barman
+Las preguntas vienen numeradas q1..q25 en el bloque ANSWERS al final. El orden es ENTREVERADO (ningún par consecutivo del mismo eje).
+
+q1  → integridad
+q2  → empatia
+q3  → optimismo_bondadoso
+q4  → autoconciencia
+q5  → integridad
+q6  → inteligencia_curiosa
+q7  → empatia
+q8  → optimismo_bondadoso
+q9  → etica_trabajo
+q10 → integridad
+q11 → empatia
+q12 → autoconciencia
+q13 → optimismo_bondadoso
+q14 → inteligencia_curiosa
+q15 → integridad
+q16 → etica_trabajo
+q17 → empatia
+q18 → autoconciencia
+q19 → optimismo_bondadoso
+q20 → integridad
+q21 → inteligencia_curiosa
+q22 → autoconciencia
+q23 → optimismo_bondadoso
+q24 → etica_trabajo
+q25 → integridad
+
+Conteo por eje (suma 25): integridad 6 · optimismo_bondadoso 5 · autoconciencia 4 · empatia 4 · inteligencia_curiosa 3 · etica_trabajo 3.
+
+REGLAS OBLIGATORIAS
+
+[A] CASCADA DE PENALIZACIONES POR INSUFICIENCIA
+Si aplica alguna de las reglas de insuficiencia (A1, A2, A3), la penalización cascadea a TODOS los scores del reporte. No es válido un score global de 40 con competencies promediando 80 — todo el reporte refleja la insuficiencia.
+
+A1. Vacías / muy cortas
+  Si MÁS de 20% de respuestas (q1..q25) están vacías o con menos de 15 palabras (más de 5 preguntas para Barman):
+    - score (global) <= 40
+    - summary = "Respuestas insuficientes"
+    - Cada eje de competencies (los 5 viejos) <= 40
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 40
+    - conocimientos_practicos sigue siendo { score: null, evidence: "..." }
+
+A2. Sin caso concreto
+  Si MENOS de 50% de respuestas contienen un ejemplo específico (situación + acción + resultado), o sea menos de 13 preguntas con caso concreto para Barman:
+    - score (global) <= 50
+    - Cada eje de competencies <= 50
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 50
+
+A3. Repetidas / idénticas
+  Si MÁS de 30% de respuestas son repetidas o casi idénticas entre sí (más de 7 preguntas para Barman):
+    - score (global) <= 50
+    - summary = "Respuestas repetitivas"
+    - Cada eje de competencies <= 50
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 50
+
+A4. Cascada con varias reglas
+  Si aplican varias reglas simultáneamente, usa el LÍMITE MÁS ESTRICTO (el valor más bajo entre los aplicables) para todos los scores. Ejemplo: A1 dispara (techo 40) y A3 dispara (techo 50) → todos los scores <= 40.
+
+[B] EJES GUIDARA SIN RESPUESTAS EVALUABLES
+En cada eje Guidara: si TODAS las respuestas asignadas a ese eje están vacías o con menos de 15 palabras:
+  - score del eje = 0
+  - evidence = "respuesta insuficiente para evaluar"
+
+En cada eje Guidara: si UNA O MÁS respuestas del eje son evaluables, califica con las disponibles. NO penalices el eje por respuestas vacías de OTROS ejes — EXCEPTO cuando aplique una regla de cascada [A1/A2/A3], en cuyo caso aplica el techo correspondiente.
+
+NOTA ESPECÍFICA PARA BARMAN — eje optimismo_bondadoso (MOTOR DE BARRA)
+El eje optimismo tiene 5 preguntas en total: q3, q8, q13, q19, q23. De esas 5:
+  - 3 son escenarios operativos NUEVOS (Barman N1–N3) que aterrizan al barman como motor único de la barra (sin equipo que cargue por él):
+    q8  = miércoles 8 PM con un solo cliente sentado en la barra durante 2 horas seguidas
+    q13 = último happy hour aburrido sin gente — iniciativa para cambiar el ambiente o turno tranquilo
+    q23 = mal día personal con cliente a 60 cm sin escape físico al salón
+  - 2 son rewrites situacionales del banco original:
+    q3  = cliente al que vendiste cóctel premium o segunda ronda por sugerencia tuya, no porque él lo pidió
+    q19 = último turno donde saliste con energía sintiendo que aportaste algo distinto
+
+El filtro real: el barman es motor ÚNICO del ambiente de la barra; cero compañeros que carguen la energía por él (a diferencia de mesero, que tiene capitán y sub que pueden cargar tono del piso). Si las 5 están vacías o son generalidades del tipo "siempre trato de ser positivo con el cliente" sin un solo escenario aterrizado, optimismo cae con techo bajo aunque otras respuestas estén contestadas. Las 3 NUEVAS son las que más fuerzan caso concreto (escenarios operativos aterrizados); las 2 reescritas son control del nivel de honestidad sobre la propia ejecución.
+
+NOTA ESPECÍFICA PARA BARMAN — eje integridad (EJE DE MAYOR EXPOSICIÓN)
+El eje integridad tiene 6 preguntas en total: q1, q5, q10, q15, q20, q25. De esas 6:
+  - 3 son escenarios operativos NUEVOS, dinero+alcohol DIRECTOS al barman:
+    q5  = corte de propinas del turno con $200 a favor sin testigo
+    q10 = cliente paga $1,500 por $1,420 y se va sin esperar el cambio
+    q20 = compañero ofrece probar el trago del cliente con gerencia ausente
+  - 3 son rewrites de escenarios morales operativos:
+    q1  = cóctel mal hecho sin que nadie note — admitir vs encubrir
+    q15 = compañero hace algo mal — trago no cobrado, propina mal repartida, cortesía sin autorizar
+    q25 = cubrir turno de compañero que llegó oliendo a alcohol con 15 minutos para abrir
+
+El filtro real: el barman tiene MAYOR exposición directa a dinero líquido + alcohol del piso. Las 3 NUEVAS (q5, q10, q20) son tentaciones DIRECTAS al barman, no decisiones de testigo: "qué haces con este dinero", "qué le respondes a este compañero". Si responde con frases reflexivas tipo "siempre actúo honestamente" sin describir qué pensaría y qué haría con los $200 concretos o con el trago concreto, integridad cae con techo bajo aunque otras respuestas estén contestadas. Las 3 rewrites son testimonios de testigo o decisión moral; son control.
+
+Razón estructural: integridad probablemente vuelve a CRÍTICO en umbrales con banda alta (verde candidato ≥ 85, +10 estricto sobre Sub y Cap), dado que es el eje con mayor exposición operativa del puesto. Falsificar integridad en barra es contrato implícito directo con la pérdida del restaurante.
+
+NOTA ESPECÍFICA PARA BARMAN — eje autoconciencia
+Las preguntas q4, q12, q18, q22 son escenarios de ejecución bajo estrés con cliente a 60 cm (10+ tickets colgados con meseros gritando, corrección pública por chef/gerente/capitán/mesero senior, cansancio extremo en turno, algo del equipo que te sacó de tus casillas en pleno servicio). Si las respuestas son conceptuales o evasivas ("respiro y sigo", "no me lo tomo personal") sin describir qué hizo el candidato consigo mismo en el momento, el eje cae con techo bajo. Razón: el cliente está a 60 cm del barman sin escape físico — un barman que no se lee saturado lo paga directamente la experiencia del cliente, no se puede esconder detrás de la barra como tampoco puede esconderse del cliente.
+
+[C] EVIDENCE Y ESCAPE DE CARACTERES
+Para "evidence" en competenciesGuidara:
+- Cita LITERAL del candidato. No parafrasees.
+- Máximo 25 palabras. Si excede, recorta con [...] al final.
+- Si la cita contiene comillas dobles ("), reemplázalas por comillas simples (') O escápalas con backslash (\\"). Cualquiera de las dos funciona; sé consistente dentro del mismo evidence.
+- Si la cita contiene backslashes literales (\\), escápalos como (\\\\).
+- La integridad del JSON es PRIORITARIA sobre la fidelidad absoluta del carácter original. Si dudas, sustituye por comilla simple.
+
+[D] GENERALES
+- No inventes información que no esté en las respuestas. No supongas.
+- Sin markdown, sin \`\`\`, sin texto fuera del JSON.
+
+GUÍA DE PUNTUACIÓN (aplica a TODOS los scores 0-100)
+- 90-100: respuestas profundas, consistentes, con ejemplos reales y reflexión propia.
+- 75-89: buenas respuestas, algunos vacíos o generalidades.
+- 55-74: respuestas aceptables pero genéricas, sin caso concreto.
+- 30-54: respuestas insuficientes o muy cortas.
+- 0-29: respuestas vacías, irrelevantes o evasivas.
+
+Recordatorio: si dispara una regla de cascada [A], el techo de la regla manda sobre la guía de puntuación.
+
+ANSWERS DEL CANDIDATO
+${JSON.stringify(answers)}
+`.trim()
+}
+
 // Selector: decide qué prompt usar según el rol.
 // Mantener este selector como única puerta — si en el futuro migramos
 // otro puesto, agregar su variante aquí (no en psychSubmit).
@@ -695,5 +906,6 @@ export function buildPsychPrompt(role: string, answers: unknown): string {
   if (role === 'Subgerente') return buildPromptGuidaraSubgerente(answers)
   if (role === 'Mesero') return buildPromptGuidaraMesero(answers)
   if (role === 'Capitán') return buildPromptGuidaraCapitan(answers)
+  if (role === 'Barman') return buildPromptGuidaraBarman(answers)
   return buildPromptLegacy(role, answers)
 }
