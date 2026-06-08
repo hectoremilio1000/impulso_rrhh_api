@@ -896,6 +896,219 @@ ${JSON.stringify(answers)}
 `.trim()
 }
 
+export function buildPromptGuidaraCook(answers: unknown): string {
+  return `
+Evalúa un EXAMEN PSICOMÉTRICO para Cocinero con criterio de RH senior.
+
+CONTEXTO DEL PUESTO
+El Cocinero es OPERATIVO de BACK-OF-HOUSE: PRIMER puesto SIN cara al cliente del piso. NO sirve al cliente (lo hace el mesero), NO maneja caja (lo hace subgerente), NO dirige equipo (lo hace chef gerente), NO vende sugestivamente (no hay venta en cocina). Su rol es ejecutor técnico de su estación, dentro de una línea, sin reconocimiento directo del comensal. La estación está sometida a calor + ruido + comandas colgadas + presión sostenida del pase. Su valor está en cinco cosas: (a) ejecución técnica bajo presión sostenida — mantener recetas, tiempos, temperaturas, gramajes cuando hay 10+ comandas colgadas y el pase grita urgencias del piso; (b) integridad invisible — el daño que un cocinero hace por falla de carácter es invisible y diferido: higiene/contaminación cruzada que provoca intoxicación 48 h después, producto en el límite que se usa porque nadie está viendo, merma de corte premium que entró fuera de la entrega regular, platillo TUYO mal que el mesero ya se llevó a la mesa y la única forma de saberlo es que TÚ lo digas; (c) disciplina de proceso — la columna vertebral del puesto: mise en place completo aunque hayas llegado tarde, rotación PEPS aunque el producto viejo esté más escondido, cadena de frío respetada aunque haya prisa, recetas al pie aunque el compañero te diga 'hazlo más rápido', no cortar camino bajo presión aunque nadie en cocina vería los 2 pasos saltados y el cliente probablemente no los notaría; (d) empatía operacional — leer al equipo bajo calor + ruido + comandas: el ayudante perdido sin saber cómo pedir, el pase gritando urgencia (real del cliente vs pánico personal del que vino a gritar), el compañero de línea quemado a mitad de turno; (e) autoconciencia técnica — saber cuándo TÚ ya no estás al 100 sin que se note en los platos, procesar corrección TÉCNICA del chef en plena línea (corte, cocción, sazón — no actitudinal), admitir el error técnico que solo TÚ viste.
+
+El cliente NO ve al cocinero. Esa es la diferencia estructural con los 4 puestos anteriores: la autoconciencia pierde su mecanismo de retroalimentación inmediata (no hay cara del cliente que te avise) y en su lugar sube la disciplina de proceso invisible. El daño por falla de carácter en cocina es invisible-y-diferido (intoxicación a 48 h, inconsistencia no rastreable, merma silenciosa). Por eso integridad y ética son los DOS CRÍTICOS del puesto, y cocinero es el PRIMER puesto del cronograma Guidara donde ética sube de DEVELOPABLE a CRÍTICO.
+
+FORMATO DE RESPUESTA
+Devuelves SOLO JSON válido. Sin markdown, sin \`\`\` wrappers, sin texto adicional fuera del JSON. La forma EXACTA es:
+
+{
+  "score": number,
+  "summary": string,
+  "strengths": string[],
+  "risks": string[],
+  "recommendation": string,
+  "competencies": {
+    "service_protocol": number,
+    "customer_communication": number,
+    "stress_conflict": number,
+    "sales_suggestions": number,
+    "teamwork_discipline": number
+  },
+  "competenciesGuidara": {
+    "optimismo_bondadoso":      { "score": number, "evidence": string },
+    "inteligencia_curiosa":     { "score": number, "evidence": string },
+    "etica_trabajo":            { "score": number, "evidence": string },
+    "empatia":                  { "score": number, "evidence": string },
+    "autoconciencia":           { "score": number, "evidence": string },
+    "integridad":               { "score": number, "evidence": string },
+    "conocimientos_practicos":  { "score": null, "evidence": "evaluado en el examen práctico" }
+  },
+  "pass": boolean
+}
+
+CÁLCULO DEL BLOQUE "competencies" (5 ejes viejos — intactos)
+Mismo cálculo de siempre. Cada eje 0-100.
+
+PESOS (suma 100):
+- service_protocol: 30
+- customer_communication: 25
+- stress_conflict: 20
+- sales_suggestions: 15
+- teamwork_discipline: 10
+
+El campo "score" raíz se calcula como el promedio ponderado de los 5 ejes anteriores. NO uses competenciesGuidara para calcular "score".
+
+UMBRAL APTO (pass=true):
+- score global >= 82
+- service_protocol >= 70
+- customer_communication >= 70
+- ninguna competencia < 55
+
+NOTA: los 5 ejes viejos son mesero-céntricos. Para cocinero, service_protocol, customer_communication y sales_suggestions no aplican al rol real del puesto. Califica esos ejes con base en lo que las respuestas reflejen del oficio del cocinero (consistencia, manejo de presión, coordinación con pase) pero entiende que el \`pass\` viejo será MUY ruidoso. La decisión REAL viene de competenciesGuidara + umbrales.
+
+CÁLCULO DEL BLOQUE "competenciesGuidara" (7 ejes nuevos)
+Cada eje humano tiene un set fijo de preguntas asignadas (ver TAGGING). Para cada eje:
+1. Identifica las preguntas asignadas al eje (lista abajo).
+2. Lee las respuestas correspondientes del candidato.
+3. Califica de 0 a 100 según cómo esas respuestas reflejan la dimensión del eje (ver DEFINICIONES OPERATIVAS).
+4. Escoge UNA respuesta del candidato que más sustente el score y ponla en "evidence" como cita literal — máximo 25 palabras, si es más larga recorta con [...] al final. Aplica las reglas de escape de caracteres (ver REGLAS OBLIGATORIAS).
+
+Para "conocimientos_practicos":
+  score = null
+  evidence = "evaluado en el examen práctico"
+(Este eje pertenece al examen práctico, no al psicométrico.)
+
+DEFINICIONES OPERATIVAS DE LOS 7 EJES
+
+optimismo_bondadoso
+  Energía protectora en la línea sin comensal. Levantar un turno flojo de cocina donde dos compañeros tienen cara larga y hay espacios de 20-30 minutos entre comandas — hacer algo TÚ desde la estación para que esos huecos no se sientan turno muerto. Detenerse a celebrar la primera vez del ayudante o cocinero nuevo (su primer plato montado solo, su primera salsa que salió) en lugar de seguir cocinando sin verlo. Aportar algo distinto al clima de la cocina cuando el rush no marca el ritmo.
+
+inteligencia_curiosa
+  Ganas de aprender técnicas/recetas nuevas y adaptarse a contexto cambiante en vivo. Resolver con criterio cuando se acaba un insumo clave a media operación con comanda ya colgada para ese platillo (preguntar al chef, sustituir con justificación, decirle al mesero que lo cambie con honestidad). Aprender en plena operación cuando algo que no sabías te traba (técnica, corte, cocción, equipo nuevo) y procesarlo después del turno para que no vuelva a pasar.
+
+etica_trabajo
+  Disciplina invisible bajo presión sostenida. Mise en place completo aunque hayas llegado 10 minutos tarde y solo queden 20 minutos antes de servicio. Cadena de frío respetada — el producto preparado que se quedó afuera del refrigerador con tiempo desconocido NO se rescata sin avisar a quien decide. Rotación PEPS — usar primero lo viejo aunque el fresco esté arriba y más rápido. Recetas al pie cuando un compañero o jefe te dice 'hazlo más rápido' o 'así no, mejor de esta forma'. No cortar camino bajo presión — sábado pico con 12 comandas colgadas, los 2 pasos invisibles de la receta no se saltan aunque nadie en cocina los vería y el cliente probablemente no los notaría.
+
+empatia
+  Lectura del equipo de cocina y del pase, no del cliente (el cliente no está enfrente). Detectar al ayudante perdido — cara de saturado, manos temblorosas, le falta algo y no sabe cómo pedirlo — y ayudar sin descuidar la propia estación. Distinguir si la urgencia del pase/mesero/capitán que llega gritando es del cliente real ('la 12 lleva 40 minutos esperando') o pánico personal del que vino a gritar. Manejar al compañero de línea quemado a mitad de turno (platillo regresado, bronca con el pase, problema personal) en 30 segundos en plena estación para que termine el turno sin tirar más platos.
+
+autoconciencia
+  Reconocer cómo TU estado afecta tu ejecución en línea sin que se note en los platos (el cliente no te ve, pero el plato sí lo paga). Identificar a mitad de servicio que ya no estás al 100 (sueño, mal día, lesión) y cambiar cómo cocinas el resto del turno (bajar velocidad, pedir ayuda, concentrarte distinto) antes de que se manifieste en un plato mal hecho. Procesar corrección TÉCNICA del chef en plena línea (corte, cocción, sazón — no actitudinal) sin caerte y seguir produciendo 2-3 horas más con la corrección integrada. Admitir el error técnico que solo TÚ viste — cocción fuera de punto, proporción equivocada — y decidir si lo dices o lo guardas.
+
+integridad
+  Hacer lo correcto sin testigo y con tentación operativa invisible. Honestidad ante higiene — denunciar al compañero que no se lavó las manos al cambiar de proteína, que usó el mismo trapo para todo, que no cambió la tabla entre crudo y cocido, aunque la operación siga corriendo y nadie más esté viendo. Honestidad ante producto en el límite — pescado, carne o salsa madre con olor o color justo en el borde, chef ausente, 3 comandas colgadas con ese ingrediente. No cortar camino con contaminación cruzada bajo presión — viernes rush, pollo crudo + comanda urgente de ensalada, tabla limpia al otro lado de la línea, 40 segundos en juego. Honestidad ante platillo TUYO mal — quemado, crudo en el centro, mal sazonado, con un pelo — cuando el mesero ya se lo llevó a la mesa y la única forma de saberlo es que TÚ lo digas. Honestidad ante merma sin registro claro — corte premium que entró fuera de la entrega regular, sobrante al cierre, nadie va a echar en falta.
+
+conocimientos_practicos
+  Saber técnico específico del puesto (mise en place, recetas, control de temperaturas, contaminación cruzada, porcionado, priorización de comandas, coordinación con el pase, cierre de estación). NO se evalúa aquí — pertenece al examen práctico.
+
+TAGGING — qué eje mide cada pregunta del banco Cocinero
+Las preguntas vienen numeradas q1..q20 en el bloque ANSWERS al final. El orden es ENTREVERADO (ningún par consecutivo del mismo eje).
+
+q1  → integridad
+q2  → empatia
+q3  → etica_trabajo
+q4  → autoconciencia
+q5  → integridad
+q6  → optimismo_bondadoso
+q7  → etica_trabajo
+q8  → inteligencia_curiosa
+q9  → integridad
+q10 → empatia
+q11 → etica_trabajo
+q12 → autoconciencia
+q13 → integridad
+q14 → optimismo_bondadoso
+q15 → etica_trabajo
+q16 → inteligencia_curiosa
+q17 → integridad
+q18 → empatia
+q19 → autoconciencia
+q20 → etica_trabajo
+
+Conteo por eje (suma 20): integridad 5 · etica_trabajo 5 · autoconciencia 3 · empatia 3 · optimismo_bondadoso 2 · inteligencia_curiosa 2.
+
+REGLAS OBLIGATORIAS
+
+[A] CASCADA DE PENALIZACIONES POR INSUFICIENCIA
+Si aplica alguna de las reglas de insuficiencia (A1, A2, A3), la penalización cascadea a TODOS los scores del reporte. No es válido un score global de 40 con competencies promediando 80 — todo el reporte refleja la insuficiencia.
+
+A1. Vacías / muy cortas
+  Si MÁS de 20% de respuestas (q1..q20) están vacías o con menos de 15 palabras (más de 4 preguntas para Cocinero, o sea 5 o más):
+    - score (global) <= 40
+    - summary = "Respuestas insuficientes"
+    - Cada eje de competencies (los 5 viejos) <= 40
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 40
+    - conocimientos_practicos sigue siendo { score: null, evidence: "..." }
+
+A2. Sin caso concreto
+  Si MENOS de 50% de respuestas contienen un ejemplo específico (situación + acción + resultado), o sea menos de 10 preguntas con caso concreto para Cocinero:
+    - score (global) <= 50
+    - Cada eje de competencies <= 50
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 50
+
+A3. Repetidas / idénticas
+  Si MÁS de 30% de respuestas son repetidas o casi idénticas entre sí (más de 6 preguntas para Cocinero, o sea 7 o más):
+    - score (global) <= 50
+    - summary = "Respuestas repetitivas"
+    - Cada eje de competencies <= 50
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 50
+
+A4. Cascada con varias reglas
+  Si aplican varias reglas simultáneamente, usa el LÍMITE MÁS ESTRICTO (el valor más bajo entre los aplicables) para todos los scores. Ejemplo: A1 dispara (techo 40) y A3 dispara (techo 50) → todos los scores <= 40.
+
+[B] EJES GUIDARA SIN RESPUESTAS EVALUABLES
+En cada eje Guidara: si TODAS las respuestas asignadas a ese eje están vacías o con menos de 15 palabras:
+  - score del eje = 0
+  - evidence = "respuesta insuficiente para evaluar"
+
+En cada eje Guidara: si UNA O MÁS respuestas del eje son evaluables, califica con las disponibles. NO penalices el eje por respuestas vacías de OTROS ejes — EXCEPTO cuando aplique una regla de cascada [A1/A2/A3], en cuyo caso aplica el techo correspondiente.
+
+NOTA ESPECÍFICA PARA COCINERO — eje integridad (TENTACIÓN SIN TESTIGO)
+El eje integridad tiene 5 preguntas en total: q1, q5, q9, q13, q17. De esas 5:
+  - 3 son escenarios operativos NUEVOS, tentación cocina-DIRECTA sin testigo:
+    q5  = producto en el límite (olor/color al borde), chef ausente, 3 comandas colgadas con ese ingrediente
+    q9  = contaminación cruzada bajo presión (pollo crudo + comanda de ensalada urgente, tabla limpia al otro lado de la línea, 40 segundos en juego)
+    q17 = merma de corte premium sin registro claro, sobrante al cierre, entró fuera de la entrega regular
+  - 2 son rewrites situacionales del banco original:
+    q1  = denunciar al compañero que hizo higiene mal — testigo de otro
+    q13 = platillo TUYO mal — quemado, crudo, con un pelo — el mesero ya se lo llevó, la única forma de saberlo es que TÚ lo digas
+
+El filtro real: el cocinero opera SIN testigo del cliente y SIN verificación inmediata de su trabajo. El daño que hace por falla de integridad es invisible y diferido (intoxicación a 48 h, inconsistencia no rastreable, merma silenciosa). Las 3 NUEVAS (q5, q9, q17) son tentaciones DIRECTAS — "qué haces con este producto", "qué haces en estos 40 segundos", "qué pasó con ese corte". Si responde con frases reflexivas tipo "siempre actúo correctamente" sin describir qué pensaría y qué haría con el producto en el límite, con la tabla a 40 segundos o con el corte premium, integridad cae con techo bajo aunque otras respuestas estén contestadas. Las 2 rewrites son denuncia (testigo del otro) y admisión (testigo de sí mismo); son control del nivel de honestidad sobre la propia ejecución.
+
+Razón estructural: integridad es CRÍTICO en este puesto con banda alta. El cocinero deshonesto es el más peligroso del organigrama — mayor potencial de daño grave (intoxicación masiva) por menor exposición visible. Falsificar integridad en cocina es contrato implícito directo con la pérdida del restaurante.
+
+NOTA ESPECÍFICA PARA COCINERO — eje etica_trabajo (DISCIPLINA INVISIBLE)
+El eje etica_trabajo tiene 5 preguntas en total: q3, q7, q11, q15, q20. De esas 5:
+  - 4 son escenarios operativos NUEVOS, disciplina de proceso bajo presión sin verificación:
+    q7  = mise en place atrasado por llegar 10 min tarde, servicio arranca en 20 min, qué cortaste / qué priorizaste
+    q11 = rotación PEPS — producto fresco arriba, viejo abajo escondido, qué hiciste durante el turno
+    q15 = cadena de frío — producto preparado afuera del refri, tiempo desconocido pero claramente más del debido, qué haces y a quién le dices
+    q20 = sábado pico con 12 comandas colgadas, receta con 2 pasos saltables invisibles, nadie en cocina los vería
+  - 1 es rewrite situacional:
+    q3  = recetas al pie cuando compañero o jefe te dice 'hazlo más rápido' o 'mejor de esta forma'
+
+El filtro real: la disciplina de proceso en cocina es la columna vertebral del puesto. El cocinero flojo o que corta camino hace daño DISTINTO al del piso: el daño es invisible (nadie ve los 2 pasos saltados) y diferido (la inconsistencia entre platillos del mismo nombre se acumula como quejas dispersas que nadie rastrea hasta el chef; la intoxicación llega 48 h después). Las 4 NUEVAS son tentaciones de cortar camino bajo presión real — no son "¿qué tan disciplinado eres?" sino "¿qué hiciste el último viernes / sábado / día específico donde estabas tarde / encontraste el producto fresco arriba / tenías 12 comandas colgadas?". Si responde con frases genéricas tipo "soy muy disciplinado, no me gusta dejar cosas a medias" sin aterrizar el turno concreto, etica_trabajo cae con techo bajo. La rewrite q3 es el caso canónico del puesto: la persona que te dice 'hazlo más rápido' es el primer test de disciplina de la noche.
+
+Razón estructural: etica_trabajo es CRÍTICO en este puesto — el PRIMER puesto del cronograma Guidara donde sube de DEVELOPABLE a CRÍTICO. Subgerente / Mesero / Capitán / Barman tienen ética como developable porque su flojera es visible e inmediata (cliente se queja, ticket no llega, corte no cuadra). El cocinero flojo no se detecta en horas; se detecta en días o semanas — y para entonces ya hay queja masiva, intoxicación o costo de merma fuera de control. Por eso la banda de etica_trabajo debe ser estricta (similar a integridad) y rojo en etica_trabajo dispara DESCARTAR igual que rojo en integridad. Este es el cambio estructural más importante del puesto.
+
+NOTA ESPECÍFICA PARA COCINERO — eje autoconciencia (TÉCNICA, NO ACTITUDINAL)
+Las preguntas q4, q12, q19 son escenarios de ejecución TÉCNICA bajo calor + ruido + comandas. q4 = corrección del chef por algo TÉCNICO (corte, cocción, sazón) frente al pase y los meseros que pasan por comandas — no es corrección actitudinal frente al equipo que lideras (eso es Cap/Sub); es corrección de oficio que tienes que integrar a la producción de las próximas 2-3 horas. q12 = ya no estoy al 100 a mitad de servicio (sueño, mal día, lesión), nadie más se dio cuenta, qué cambiaste en cómo cocinaste el resto del turno para que no se notara en los platos. q19 = error técnico de tu estación que solo TÚ viste, el platillo salió, te lo guardaste o lo dijiste.
+
+Si las respuestas son conceptuales o evasivas ("respiro y sigo", "siempre estoy alerta") sin describir qué hizo el candidato consigo mismo en el momento (cara, velocidad, qué cambió específicamente), el eje cae con techo bajo. Razón: el cliente NO ve al cocinero, pero EL PLATO sí paga la auto-ceguera. Un cocinero que no se lee saturado lo paga directamente la consistencia del output. La disciplina de proceso (etica_trabajo crítico) compensa parcialmente la auto-ceguera del individuo — por eso autoconciencia es IMPORTANTE en cocinero, no CRÍTICO; pero sigue importando porque la disciplina no funciona sobre alguien que no se da cuenta de que ya está cortando camino.
+
+[C] EVIDENCE Y ESCAPE DE CARACTERES
+Para "evidence" en competenciesGuidara:
+- Cita LITERAL del candidato. No parafrasees.
+- Máximo 25 palabras. Si excede, recorta con [...] al final.
+- Si la cita contiene comillas dobles ("), reemplázalas por comillas simples (') O escápalas con backslash (\\"). Cualquiera de las dos funciona; sé consistente dentro del mismo evidence.
+- Si la cita contiene backslashes literales (\\), escápalos como (\\\\).
+- La integridad del JSON es PRIORITARIA sobre la fidelidad absoluta del carácter original. Si dudas, sustituye por comilla simple.
+
+[D] GENERALES
+- No inventes información que no esté en las respuestas. No supongas.
+- Sin markdown, sin \`\`\`, sin texto fuera del JSON.
+
+GUÍA DE PUNTUACIÓN (aplica a TODOS los scores 0-100)
+- 90-100: respuestas profundas, consistentes, con ejemplos reales y reflexión propia.
+- 75-89: buenas respuestas, algunos vacíos o generalidades.
+- 55-74: respuestas aceptables pero genéricas, sin caso concreto.
+- 30-54: respuestas insuficientes o muy cortas.
+- 0-29: respuestas vacías, irrelevantes o evasivas.
+
+Recordatorio: si dispara una regla de cascada [A], el techo de la regla manda sobre la guía de puntuación.
+
+ANSWERS DEL CANDIDATO
+${JSON.stringify(answers)}
+`.trim()
+}
+
 // Selector: decide qué prompt usar según el rol.
 // Mantener este selector como única puerta — si en el futuro migramos
 // otro puesto, agregar su variante aquí (no en psychSubmit).
@@ -907,5 +1120,6 @@ export function buildPsychPrompt(role: string, answers: unknown): string {
   if (role === 'Mesero') return buildPromptGuidaraMesero(answers)
   if (role === 'Capitán') return buildPromptGuidaraCapitan(answers)
   if (role === 'Barman') return buildPromptGuidaraBarman(answers)
+  if (role === 'Cocinero') return buildPromptGuidaraCook(answers)
   return buildPromptLegacy(role, answers)
 }
