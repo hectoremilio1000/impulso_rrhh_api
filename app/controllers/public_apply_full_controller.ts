@@ -8,13 +8,29 @@ import PracticalTest from '#models/practical_test'
 import { makePublicToken } from '#services/public_token'
 import { DateTime } from 'luxon'
 
-function roleToCode(desiredRole: string): string {
+// Exportado para test unitario en tests/unit/role_to_code.spec.ts.
+// Mantenerlo co-locado con el único call site (este controlador) —
+// no es servicio de uso general, no merece módulo propio.
+//
+// El check de chef usa `includes('chef')` (no `===` estricto como los
+// demás roles) porque la cadena que escriben los candidatos en el
+// dropdown "Puesto" del flujo /apply tiene 3 variantes vivas en
+// producción: "Chef gerente", "Chef", "Chef y Gerente". El frontend
+// (ExamRunner.roleFromDesiredRole) ya usa includes; este cambio
+// cierra la asimetría histórica que generaba el bug de los 16
+// candidatos chef-mal-clasificados (ver PR Chef0-BE).
+//
+// RIESGO RESIDUAL: si en el futuro se agrega un rol distinto con
+// "chef" como substring (p.ej. "sous chef", "chef de partida") que
+// NO deba mapear a chef_manager, insertar un check === más
+// específico ANTES de este includes (mismo patrón del frontend).
+export function roleToCode(desiredRole: string): string {
   const v = (desiredRole || '').toLowerCase().trim()
   if (v === 'mesero') return 'waiter'
   if (v === 'capitán' || v === 'capitan') return 'captain'
   if (v === 'cocinero') return 'cook'
   if (v === 'barman' || v === 'bartender') return 'barman'
-  if (v === 'chef gerente' || v === 'chef_gerente') return 'chef_manager'
+  if (v.includes('chef')) return 'chef_manager'
   if (v === 'subgerente') return 'assistant_manager'
   return 'waiter'
 }
