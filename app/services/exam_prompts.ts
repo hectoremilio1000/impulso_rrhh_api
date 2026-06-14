@@ -1109,6 +1109,228 @@ ${JSON.stringify(answers)}
 `.trim()
 }
 
+export function buildPromptGuidaraChef(answers: unknown): string {
+  return `
+Evalúa un EXAMEN PSICOMÉTRICO para Chef con criterio de RH senior.
+
+CONTEXTO DEL PUESTO
+El Chef es MANDO ALTO de BACK-OF-HOUSE: el SEGUNDO puesto del cronograma Guidara con ÉTICA CRÍTICO (después de Cocinero). No es ejecutor de estación: dirige al equipo de cocina, audita el proceso, decide proveedores y escandallos, hace briefings y cierre, modela el estándar que el equipo replica. Su valor está en cinco cosas: (a) custodio del proceso invisible que el equipo ejecuta — la disciplina de toda la cocina cuelga de SU modelaje, no de su ejecución directa; (b) integridad invisible con poder operativo — decide proveedores, calcula escandallos, recibe regalos/comisiones, tiene tentación DE MANDO (decisión política, relación cercana, autoridad sobre proveedor) que un cocinero no tiene; (c) ética como MULTIPLICADOR — el chef que corta camino enseña al equipo entero a cortar camino, su flojera se replica río abajo; (d) empatía operacional Y mediadora desde el mando — lee al cocinero quemado, decide a quién mandar a casa con costo operativo, media conflictos cocina-piso (capitán/subgerente reclamando en el pase delante del equipo), maneja el clima social post-error del equipo; (e) autoconciencia como líder VISIBLE al equipo — su mal día contagia a toda la cocina (no puede esconderse detrás del pase como el cocinero), su error frente al equipo socava su autoridad si no lo reconoce a tiempo.
+
+El Chef MODELA disciplina; los cocineros la EJECUTAN. El daño por falla de carácter en el chef es invisible-y-diferido como el del cocinero, pero MULTIPLICADOR: cada cocinero del equipo replica el estándar del chef. Por eso integridad y ética son los DOS CRÍTICOS del puesto con bandas MÁS ESTRICTAS que Cocinero (+5 estricto en bandas verde/amarillo: integridad 85/70 vs 80/65 cocinero, ética 80/65 vs 75/60 cocinero). El cocinero deshonesto daña una estación; el chef deshonesto enseña al equipo entero que el atajo es la norma — su falla se multiplica al equipo y se acumula al estándar del restaurante completo.
+
+FORMATO DE RESPUESTA
+Devuelves SOLO JSON válido. Sin markdown, sin \`\`\` wrappers, sin texto adicional fuera del JSON. La forma EXACTA es:
+
+{
+  "score": number,
+  "summary": string,
+  "strengths": string[],
+  "risks": string[],
+  "recommendation": string,
+  "competencies": {
+    "service_protocol": number,
+    "customer_communication": number,
+    "stress_conflict": number,
+    "sales_suggestions": number,
+    "teamwork_discipline": number
+  },
+  "competenciesGuidara": {
+    "optimismo_bondadoso":      { "score": number, "evidence": string },
+    "inteligencia_curiosa":     { "score": number, "evidence": string },
+    "etica_trabajo":            { "score": number, "evidence": string },
+    "empatia":                  { "score": number, "evidence": string },
+    "autoconciencia":           { "score": number, "evidence": string },
+    "integridad":               { "score": number, "evidence": string },
+    "conocimientos_practicos":  { "score": null, "evidence": "evaluado en el examen práctico" }
+  },
+  "pass": boolean
+}
+
+CÁLCULO DEL BLOQUE "competencies" (5 ejes viejos — intactos)
+Mismo cálculo de siempre. Cada eje 0-100.
+
+PESOS (suma 100):
+- service_protocol: 30
+- customer_communication: 25
+- stress_conflict: 20
+- sales_suggestions: 15
+- teamwork_discipline: 10
+
+El campo "score" raíz se calcula como el promedio ponderado de los 5 ejes anteriores. NO uses competenciesGuidara para calcular "score".
+
+UMBRAL APTO (pass=true):
+- score global >= 82
+- service_protocol >= 70
+- customer_communication >= 70
+- ninguna competencia < 55
+
+NOTA: los 5 ejes viejos son mesero-céntricos. Para chef, service_protocol, customer_communication y sales_suggestions no aplican al rol real del puesto (chef no atiende cliente, no vende, no opera protocolo de servicio). Califica esos ejes con base en lo que las respuestas reflejen del oficio del chef (consistencia, manejo de presión, coordinación con pase y piso desde el mando) pero entiende que el \`pass\` viejo será MUY ruidoso. La decisión REAL viene de competenciesGuidara + umbrales.
+
+CÁLCULO DEL BLOQUE "competenciesGuidara" (7 ejes nuevos)
+Cada eje humano tiene un set fijo de preguntas asignadas (ver TAGGING). Para cada eje:
+1. Identifica las preguntas asignadas al eje (lista abajo).
+2. Lee las respuestas correspondientes del candidato.
+3. Califica de 0 a 100 según cómo esas respuestas reflejan la dimensión del eje (ver DEFINICIONES OPERATIVAS).
+4. Escoge UNA respuesta del candidato que más sustente el score y ponla en "evidence" como cita literal — máximo 25 palabras, si es más larga recorta con [...] al final. Aplica las reglas de escape de caracteres (ver REGLAS OBLIGATORIAS).
+
+Para "conocimientos_practicos":
+  score = null
+  evidence = "evaluado en el examen práctico"
+(Este eje pertenece al examen práctico, no al psicométrico.)
+
+DEFINICIONES OPERATIVAS DE LOS 7 EJES
+
+optimismo_bondadoso
+  Energía protectora DESDE EL MANDO en cocina. Levantar al equipo cansado a media noche en pleno servicio largo — algo concreto desde el pase como Chef (no como compañero de línea) para que terminen el turno arriba. Hacer debrief post-turno-malo sin destruir al equipo: abrir conversación sobre lo que pasó, qué pediste de cara al siguiente turno, mencionar nombres específicos o hacerlo general. Motivar post-crisis para el siguiente turno: qué decir y qué NO decir al equipo desanimado para que al día siguiente entren con la cabeza arriba.
+
+inteligencia_curiosa
+  Curiosidad estratégica con criterio de mando. Cuestionar "siempre se ha hecho así" cuando llegas a una cocina nueva (una técnica, un proveedor de años, una organización de cámara, una receta sin auditar) — qué cambias, qué dejas, qué investigas antes de decidir. Decidir bajo información incompleta a media operación (insumo faltante, cocinero clave ausente, intoxicación reportada el día anterior) en 5-10 minutos: qué buscaste primero, a quién consultaste antes de decidir. Detectar patrones operativos (platillo que regresa, merma que sube los lunes, proveedor inconsistente con cierto producto) y traducirlos a cambios. Proponer mejoras reales que se implementaron — qué observaste, cómo se la planteaste al dueño/gerente.
+
+etica_trabajo
+  MODELAR disciplina de proceso al equipo, no solo ejecutarla. Briefing pre-turno: detectar mise en place medio o estación mal organizada 30 min antes de abrir y decidir corregir (con margen menor) vs arrancar igual vs hacerlo tú mismo en silencio. PEPS modelado al equipo del fin de semana que dejó producto nuevo arriba y viejo abajo — corregirlo el lunes, hacerlo con ellos al llegar, qué les dices. Parar plato del pase que TÚ sabes no está como debería aunque cueste 4-6 min y un mesero molesto. Modelar bajando al pase cuando un cocinero está saturado (decisión política del chef que se mete vs solo mandar a alguien más). Cierre HACCP el sábado cuando el equipo rendido quiere irse y hay 3 cosas mal del cierre invisibles que el lunes van a doler. Escandallo desactualizado que NADIE TE ESTÁ PIDIENDO — caso canónico de auto-disciplina invisible del mando.
+
+empatia
+  Lectura DEL EQUIPO DE COCINA con cabeza de mando, no del cliente (el cliente no está enfrente) y no como compañero (eres el jefe). Decidir mandar a casa a alguien con costo operativo (hueco en la línea, otro cocinero cargando dos estaciones, queja del dueño cuando se entere). Cocinero que se quiebra en pico — 30 segundos en pleno servicio + qué hiciste con su estación + qué hiciste con esa persona después del turno. Empatía COLECTIVA post-error: chismes, miradas, sarcasmo del equipo hacia el cocinero que erró — manejo del clima social para que la reacción no se vuelva hostilidad. Capitán/subgerente reclamando en el pase delante de tu equipo de cocina — sin caer en gritar tú también ni darle la razón inmediata frente al equipo. Equilibrar empatía con límites cuando un cocinero lleva 2 semanas mal y el equipo ya carga su trabajo — cuándo decides que ya no puedes seguir cubriéndolo.
+
+autoconciencia
+  Modelar autoconocimiento como líder VISIBLE al equipo. Mal día personal sin poder esconderte detrás del pase como el cocinero — primeros 15 min del turno para que tu mal día no contagie al equipo (acción concreta o frase específica, no "respiro y me concentro"). Entrar al turno enojado por algo (cocinero mal, indicación del dueño, decisión sin consultarte) y liderar igual — primeros 10 min con tu enojo. Admitir EN EL MOMENTO frente al equipo cuando tu decisión estuvo mal (cambio de receta, organización de línea, sanción a cocinero, compra a proveedor) — qué dijiste exactamente y cuánto tiempo pasó entre el error y el reconocimiento. Feedback que se repite a lo largo de tu carrera como chef (del dueño actual, gerente anterior, cocinero senior, equipo anterior cuando te fuiste) — qué cambiaste, qué decidiste mantener en desacuerdo. Detectar — semanas o meses después — que un problema del equipo (rotación, ambiente, alguien que se fue, costos descontrolados, pelea con piso) tenía como causa principal algo que TÚ hiciste o dejaste de hacer como Chef.
+
+integridad
+  Hacer lo correcto sin testigo y con tentación DE MANDO operativamente invisible. Custodio del estándar al llegar nuevo a una cocina con prácticas mal (rotación de aceite estirada, descongelados sin anotar, higiene relajada) — qué cambias en el primer mes y por etapas. Proveedor con el que trabajas años ofrece "regalo" personal (caja premium para tu casa, invitación a evento, gratificación en efectivo, comisión "por preferencia") — qué le respondes, a quién informas, cómo manejas la relación después. Robo en cocina por persona cercana (segundo, cocinero senior con quien hiciste equipo años) llevándose producto premium al cierre — cuándo te enteras, qué haces, qué pasa con la relación. Amigo cocinero pide taparle (llegada tarde recurrente, salida temprana, llevarse corte premium el viernes) — qué le respondes y qué haces si es recurrente con la amistad y el equipo que ya lo notó. Escandallo honesto cuando el dueño no quiere oírlo (costo real con merma + tiempos + desperdicio baja el margen objetivo) — metes el costo real o lo ajustas con merma "optimista". Error TUYO de nivel mando que nadie cazó (escandallo mal calculado con margen de más, proveedor mal metido que subió costo, descongelado dejado pasar, platillo del pase que dejaste salir y el cliente no se quejó pero TÚ supiste que estaba mal) — lo reportaste, lo corregiste en silencio, lo dejaste pasar. Dueño/gerente pide algo no-ético en cocina (usar producto al borde, repetir plato malo, no parar contaminación cruzada, acelerar al equipo más allá del límite seguro) — qué le dijiste, qué hiciste con la operación.
+
+conocimientos_practicos
+  Saber técnico específico del puesto (mise en place ejecutivo, planeación de menú, escandallos, control de costo/merma, manejo de proveedores, sanidad/HACCP, comunicación con pase, briefing pre-turno, gestión de inventario). NO se evalúa aquí — pertenece al examen práctico.
+
+TAGGING — qué eje mide cada pregunta del banco Chef
+Las preguntas vienen numeradas q1..q30 en el bloque ANSWERS al final. El orden es ENTREVERADO (ningún par consecutivo del mismo eje; ningún par de críticos consecutivo).
+
+q1  → integridad
+q2  → empatia
+q3  → etica_trabajo
+q4  → autoconciencia
+q5  → integridad
+q6  → inteligencia_curiosa
+q7  → etica_trabajo
+q8  → optimismo_bondadoso
+q9  → integridad
+q10 → empatia
+q11 → etica_trabajo
+q12 → autoconciencia
+q13 → integridad
+q14 → inteligencia_curiosa
+q15 → etica_trabajo
+q16 → optimismo_bondadoso
+q17 → empatia
+q18 → integridad
+q19 → autoconciencia
+q20 → etica_trabajo
+q21 → inteligencia_curiosa
+q22 → integridad
+q23 → empatia
+q24 → autoconciencia
+q25 → etica_trabajo
+q26 → optimismo_bondadoso
+q27 → integridad
+q28 → autoconciencia
+q29 → empatia
+q30 → inteligencia_curiosa
+
+Conteo por eje (suma 30): integridad 7 · etica_trabajo 6 · empatia 5 · autoconciencia 5 · inteligencia_curiosa 4 · optimismo_bondadoso 3. Críticos = 13/30 = 43.3% del banco.
+
+REGLAS OBLIGATORIAS
+
+[A] CASCADA DE PENALIZACIONES POR INSUFICIENCIA
+Si aplica alguna de las reglas de insuficiencia (A1, A2, A3), la penalización cascadea a TODOS los scores del reporte. No es válido un score global de 40 con competencies promediando 80 — todo el reporte refleja la insuficiencia.
+
+A1. Vacías / muy cortas
+  Si MÁS de 20% de respuestas (q1..q30) están vacías o con menos de 15 palabras (más de 6 preguntas para Chef, o sea 7 o más):
+    - score (global) <= 40
+    - summary = "Respuestas insuficientes"
+    - Cada eje de competencies (los 5 viejos) <= 40
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 40
+    - conocimientos_practicos sigue siendo { score: null, evidence: "..." }
+
+A2. Sin caso concreto
+  Si MENOS de 50% de respuestas contienen un ejemplo específico (situación + acción + resultado), o sea menos de 15 preguntas con caso concreto para Chef:
+    - score (global) <= 50
+    - Cada eje de competencies <= 50
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 50
+
+A3. Repetidas / idénticas
+  Si MÁS de 30% de respuestas son repetidas o casi idénticas entre sí (más de 9 preguntas para Chef, o sea 10 o más):
+    - score (global) <= 50
+    - summary = "Respuestas repetitivas"
+    - Cada eje de competencies <= 50
+    - Cada eje de competenciesGuidara con respuestas evaluables <= 50
+
+A4. Cascada con varias reglas
+  Si aplican varias reglas simultáneamente, usa el LÍMITE MÁS ESTRICTO (el valor más bajo entre los aplicables) para todos los scores. Ejemplo: A1 dispara (techo 40) y A3 dispara (techo 50) → todos los scores <= 40.
+
+[B] EJES GUIDARA SIN RESPUESTAS EVALUABLES
+En cada eje Guidara: si TODAS las respuestas asignadas a ese eje están vacías o con menos de 15 palabras:
+  - score del eje = 0
+  - evidence = "respuesta insuficiente para evaluar"
+
+En cada eje Guidara: si UNA O MÁS respuestas del eje son evaluables, califica con las disponibles. NO penalices el eje por respuestas vacías de OTROS ejes — EXCEPTO cuando aplique una regla de cascada [A1/A2/A3], en cuyo caso aplica el techo correspondiente.
+
+NOTA ESPECÍFICA PARA CHEF — eje integridad (TENTACIÓN DE MANDO SIN TESTIGO)
+El eje integridad tiene 7 preguntas en total: q1, q5, q9, q13, q18, q22, q27. De esas 7:
+  - q1  = custodio del estándar al llegar nuevo a cocina con prácticas mal (rotación de aceite estirada, descongelados sin anotar, higiene relajada)
+  - q5  = proveedor con años de relación ofrece regalo personal (caja premium / evento / comisión por preferencia)
+  - q9  = robo en cocina por persona cercana (segundo o cocinero senior con quien hiciste equipo años) llevándose producto premium al cierre
+  - q13 = amigo cocinero pide taparle (llegada tarde recurrente / salida temprana / llevarse corte premium el viernes)
+  - q18 = escandallo honesto cuando el dueño no quiere oírlo (costo real baja el margen objetivo, opción de meter merma "optimista")
+  - q22 = error TUYO de nivel mando que nadie cazó (escandallo mal, proveedor mal metido, descongelado dejado pasar, platillo del pase que dejaste salir)
+  - q27 = dueño/gerente pide algo no-ético en cocina (producto al borde, repetir plato malo, no parar contaminación cruzada, acelerar al equipo más allá del límite seguro)
+
+El filtro real: el chef opera SIN testigo del dueño en la mayoría de decisiones diarias y CON poder operativo que un cocinero no tiene (decide proveedores, calcula escandallos, autoridad sobre el equipo, custodia el estándar). Las tentaciones son DE MANDO — decisión política, relación cercana con proveedor/amigo, conversación con el dueño que no quiere oírlo, autoridad para tapar o reportar. El daño del chef deshonesto es invisible-y-diferido como el del cocinero, pero MULTIPLICADOR: cada cocinero del equipo replica el estándar del jefe — el atajo del chef se convierte en el estándar del restaurante completo. Si responde con frases reflexivas tipo "siempre actúo correctamente" o "no acepto regalos" sin describir qué le dijo al proveedor, qué hizo con el amigo cocinero, cómo manejó la conversación con el dueño o qué hizo con el error de nivel mando, integridad cae con techo bajo aunque otras respuestas estén contestadas.
+
+Razón estructural: integridad es CRÍTICO en este puesto con banda MÁS ESTRICTA que Cocinero (verde ≥85 vs ≥80, amarillo ≥70 vs ≥65 — +5 estricto). El chef deshonesto es el más peligroso del organigrama de cocina: su falla se MULTIPLICA porque enseña al equipo entero que el atajo es la norma y la asume como estándar. Banda alta por modelaje de mando.
+
+NOTA ESPECÍFICA PARA CHEF — eje etica_trabajo (DISCIPLINA INVISIBLE QUE EL CHEF MODELA AL EQUIPO)
+El eje etica_trabajo tiene 6 preguntas en total: q3, q7, q11, q15, q20, q25. De esas 6:
+  - q3  = briefing pre-turno: detectar mise en place medio o estación mal organizada 30 min antes de abrir y decidir corregir vs arrancar con menos margen vs hacerlo tú en silencio
+  - q7  = PEPS del equipo del fin de semana — producto nuevo arriba, viejo abajo (clásico atajo de cierre); arreglar lunes, hacerlo con ellos al llegar, qué les dices
+  - q11 = parar plato del pase que TÚ sabes no está como debería aunque cueste 4-6 min y un mesero molesto
+  - q15 = modelar bajando al pase cuando un cocinero está saturado (decisión política del chef que se mete vs solo mandar a alguien más)
+  - q20 = cierre HACCP el sábado cuando el equipo rendido quiere irse y hay 3 cosas mal invisibles que el lunes van a doler (salsa madre sin etiqueta, descongelado sin marca de hora, trapo de proteína usado en superficie de verduras)
+  - q25 = escandallo desactualizado que NADIE TE ESTÁ PIDIENDO (proveedor cambió, merma cambió, insumo cambió) — caso CANÓNICO de auto-disciplina invisible del mando
+
+El filtro real: la ética del chef NO es solo disciplina propia — es MODELAJE de disciplina al equipo entero. El chef ejecuta menos producción que el cocinero, pero su modelaje es la columna vertebral del estándar de toda la cocina. Las 6 preguntas son escenarios MANDO-COCINA donde el Chef MODELA disciplina, no la ejecuta: el equipo lo está viendo decidir, y la decisión sienta el estándar que ellos replicarán mañana sin él presente. Si la respuesta no aterriza CASO CONCRETO del equipo del candidato — qué le dijo al equipo del fin de semana, cómo reaccionaron sus cocineros cuando bajó al pase, qué pidió específicamente en el cierre del sábado, qué hizo con el escandallo desactualizado que nadie le pedía — ética cae con techo bajo, aunque las frases suenen disciplinadas. La rewrite q25 (escandallo desactualizado que nadie te está pidiendo) es el caso CANÓNICO de auto-disciplina invisible del puesto: hacer el trabajo correcto SIN demanda externa es donde se prueba si el chef MODELA disciplina o solo ejecuta cuando lo presionan.
+
+Razón estructural: etica_trabajo es CRÍTICO en este puesto con banda MÁS ESTRICTA que Cocinero (verde ≥80 vs ≥75, amarillo ≥65 vs ≥60 — +5 estricto). El chef flojo es peor que el cocinero flojo porque su flojera se MULTIPLICA — el equipo replica el estándar del jefe. Rojo en ética dispara DESCARTAR igual que rojo en integridad. Banda alta por modelaje de mando: el chef es el SEGUNDO puesto del cronograma Guidara con ética CRÍTICO (después de Cocinero), y la banda sube +5 sobre Cocinero porque la multiplicación al equipo es el riesgo dominante.
+
+NOTA ESPECÍFICA PARA CHEF — eje autoconciencia (AUTOCRÍTICA COMO LÍDER VISIBLE AL EQUIPO)
+Las preguntas q4, q12, q19, q24, q28 son escenarios donde el Chef está VISIBLE al equipo y su autoconciencia tiene consecuencia política, no solo personal. q4 = mal día personal sin poder esconderte detrás del pase como el cocinero, primeros 15 min del turno para no contagiar al equipo. q12 = entrar al turno enojado por algo (cocinero mal, indicación del dueño, decisión sin consultarte) y tener que liderar igual, primeros 10 min con tu enojo. q19 = admitir EN EL MOMENTO frente al equipo cuando tu decisión estuvo mal — qué dijiste exactamente y cuánto tiempo pasó entre el error y el reconocimiento. q24 = feedback que se repite a lo largo de tu carrera como chef (del dueño actual, gerente anterior, cocinero senior, equipo anterior cuando te fuiste). q28 = detectar — semanas o meses después — que un problema del equipo (rotación, ambiente pesado, alguien que se fue, costos descontrolados, pelea recurrente con piso) tenía como causa principal algo que TÚ hiciste o dejaste de hacer como Chef.
+
+Si las respuestas son conceptuales o evasivas ("respiro y sigo", "siempre estoy alerta", "soy autocrítico") sin describir qué hizo el candidato consigo mismo en el momento (acción específica, frase concreta, tiempo medible entre error y reconocimiento), el eje cae con techo bajo. Razón: el chef es VISIBLE al equipo de cocina (no puede esconderse detrás del pase como el cocinero); su mal manejo emocional contagia a todo el equipo, y su error no reconocido socava su autoridad río abajo. La autoconciencia del chef es POLÍTICA — qué decisión toma con su estado/error frente al equipo que lidera. Por eso autoconciencia es IMPORTANTE en chef como en cocinero, pero el ÁNGULO es distinto: cocinero la usa para no fallar la estación; chef la usa para no fallar al equipo.
+
+[C] EVIDENCE Y ESCAPE DE CARACTERES
+Para "evidence" en competenciesGuidara:
+- Cita LITERAL del candidato. No parafrasees.
+- Máximo 25 palabras. Si excede, recorta con [...] al final.
+- Si la cita contiene comillas dobles ("), reemplázalas por comillas simples (') O escápalas con backslash (\\"). Cualquiera de las dos funciona; sé consistente dentro del mismo evidence.
+- Si la cita contiene backslashes literales (\\), escápalos como (\\\\).
+- La integridad del JSON es PRIORITARIA sobre la fidelidad absoluta del carácter original. Si dudas, sustituye por comilla simple.
+
+[D] GENERALES
+- No inventes información que no esté en las respuestas. No supongas.
+- Sin markdown, sin \`\`\`, sin texto fuera del JSON.
+
+GUÍA DE PUNTUACIÓN (aplica a TODOS los scores 0-100)
+- 90-100: respuestas profundas, consistentes, con ejemplos reales y reflexión propia.
+- 75-89: buenas respuestas, algunos vacíos o generalidades.
+- 55-74: respuestas aceptables pero genéricas, sin caso concreto.
+- 30-54: respuestas insuficientes o muy cortas.
+- 0-29: respuestas vacías, irrelevantes o evasivas.
+
+Recordatorio: si dispara una regla de cascada [A], el techo de la regla manda sobre la guía de puntuación.
+
+ANSWERS DEL CANDIDATO
+${JSON.stringify(answers)}
+`.trim()
+}
+
 // Selector: decide qué prompt usar según el rol.
 // Mantener este selector como única puerta — si en el futuro migramos
 // otro puesto, agregar su variante aquí (no en psychSubmit).
@@ -1121,5 +1343,10 @@ export function buildPsychPrompt(role: string, answers: unknown): string {
   if (role === 'Capitán') return buildPromptGuidaraCapitan(answers)
   if (role === 'Barman') return buildPromptGuidaraBarman(answers)
   if (role === 'Cocinero') return buildPromptGuidaraCook(answers)
+  // Chef: las 3 variantes vivas en prod ("Chef", "Chef gerente",
+  // "Chef y Gerente", + mayúsculas) ya están canonicalizadas a
+  // "Chef gerente" por normalizePsychRole en public_controller.ts.
+  // Si llega "Chef gerente" aquí es porque pasó por ese normalizer.
+  if (role === 'Chef gerente') return buildPromptGuidaraChef(answers)
   return buildPromptLegacy(role, answers)
 }

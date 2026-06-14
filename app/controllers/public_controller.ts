@@ -15,6 +15,33 @@ import { setStageTx } from '#services/stage_service'
 // esta lista en una sola fuente de verdad.
 const VALID_ROLES_ES = ['Mesero', 'Capitán', 'Cocinero', 'Barman', 'Chef gerente', 'Subgerente']
 
+// Exportado para test unitario en tests/unit/normalize_psych_role.spec.ts.
+// Mantenerlo co-locado con el único call site (psychSubmit en este
+// controller) — no es servicio de uso general.
+//
+// Espejo psych de roleToCode (PR Chef0-BE en public_apply_full_controller.ts):
+// las 3 variantes de chef vivas en producción ("Chef gerente", "Chef",
+// "Chef y Gerente", incluyendo mayúsculas) canonicalizan a "Chef gerente"
+// — el label que VALID_ROLES_ES sí incluye y que el router de
+// buildPsychPrompt despacha a buildPromptGuidaraChef. Sin esta
+// normalización, "Chef" o "Chef y Gerente" caerían al fallback 'Mesero'
+// y se evaluarían con prompt de Mesero (mismo bug de los 16 candidatos
+// chef-mal-clasificados que motivó Chef0-BE en el flujo apply).
+//
+// Para roles NO-chef devuelve el texto crudo intacto — el whitelist
+// VALID_ROLES_ES sigue siendo la fuente de verdad para los otros 5
+// puestos. NO toca su comportamiento.
+//
+// DEUDA: la coexistencia de roleToCode (apply, includes-based) y
+// VALID_ROLES_ES + normalizePsychRole (psych, label-based con alias chef)
+// es un olor a bug — dos caminos de clasificación distintos. Refactor
+// label→roleCode unificado pendiente; ver PRIORIDADES.md.
+export function normalizePsychRole(raw: string): string {
+  const v = (raw || '').trim()
+  if (v.toLowerCase().includes('chef')) return 'Chef gerente'
+  return v
+}
+
 /**
  * MVP: sin auth.
  * Tokens = links públicos (no login).
@@ -121,10 +148,14 @@ export default class PublicController {
       // Cargar candidato para construir un prompt rol-específico.
       // Whitelistea desiredRole contra VALID_ROLES_ES — defensa contra prompt
       // injection si el campo dejara de venir de un Select controlado.
+      // normalizePsychRole canonicaliza las 3 variantes de chef ("Chef",
+      // "Chef gerente", "Chef y Gerente") a "Chef gerente" ANTES del
+      // whitelist — espejo del fix Chef0-BE en el flujo apply.
       const candidate = await Candidate.findOrFail(test.candidateId)
       const raw = (candidate.desiredRole || '').trim()
-      const role = VALID_ROLES_ES.includes(raw) ? raw : 'Mesero'
-      if (raw && !VALID_ROLES_ES.includes(raw)) {
+      const normalized = normalizePsychRole(raw)
+      const role = VALID_ROLES_ES.includes(normalized) ? normalized : 'Mesero'
+      if (raw && !VALID_ROLES_ES.includes(normalized)) {
         logger.warn(
           { candidateId: candidate.id, raw },
           'Unknown desiredRole on psychSubmit, falling back to Mesero'
