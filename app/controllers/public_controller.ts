@@ -1,8 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
-import { gradeExamJson } from '#services/openai'
-import { buildPsychPrompt } from '#services/exam_prompts'
+import { gradePsychExam } from '#services/psych_exam_grader'
 import PsychTest from '#models/psych_test'
 import Candidate from '#models/candidate'
 import Stage from '#models/stage'
@@ -28,18 +27,43 @@ const VALID_ROLES_ES = ['Mesero', 'Capitán', 'Cocinero', 'Barman', 'Chef gerent
 // y se evaluarían con prompt de Mesero (mismo bug de los 16 candidatos
 // chef-mal-clasificados que motivó Chef0-BE en el flujo apply).
 //
-// Para roles NO-chef devuelve el texto crudo intacto — el whitelist
-// VALID_ROLES_ES sigue siendo la fuente de verdad para los otros 5
-// puestos. NO toca su comportamiento.
+// 2026-07-20 — AMPLIADO A LOS 6 PUESTOS (antes sólo canonicalizaba chef).
 //
-// DEUDA: la coexistencia de roleToCode (apply, includes-based) y
-// VALID_ROLES_ES + normalizePsychRole (psych, label-based con alias chef)
-// es un olor a bug — dos caminos de clasificación distintos. Refactor
-// label→roleCode unificado pendiente; ver PRIORIDADES.md.
+// Motivo: auditoría de `desired_role` en producción encontró que la comparación
+// exacta contra VALID_ROLES_ES mandaba ~159 candidatos (1 de cada 4) al fallback
+// 'Mesero'. Los valores reales guardados incluyen "Capitan" (107 candidatos, sin
+// acento), "subgerente" (25, minúscula), "Capitán de meseros" (8), "Mesera",
+// "Bartender", "Jefe de barra", "Cocinera", "Encargado de cocina". Todos ellos
+// contestaban el examen de su puesto pero se calificaban con el prompt de Mesero
+// — en silencio, porque el fallback sólo emitía un logger.warn.
+//
+// Ahora se compara sin acentos, sin mayúsculas y por substring, igual que hace
+// el front en ExamRunner.tsx:30 (`v.includes("capit")`). El orden de las reglas
+// IMPORTA: "Capitán de meseros" contiene "mesero", "Chef gerente" contiene
+// "gerente" y "Sub Gerente" también — por eso se evalúa de más específico a
+// más general.
+//
+// DEUDA (sin cambios): siguen coexistiendo roleToCode (apply) y esta función
+// (psych). Refactor label→roleCode unificado pendiente; ver PRIORIDADES.md.
+function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
 export function normalizePsychRole(raw: string): string {
-  const v = (raw || '').trim()
-  if (v.toLowerCase().includes('chef')) return 'Chef gerente'
-  return v
+  const v = stripAccents((raw || '').trim().toLowerCase())
+  if (!v) return ''
+
+  // De más específico a más general — no reordenar sin releer el comentario.
+  if (v.includes('chef')) return 'Chef gerente'
+  if (v.includes('subgerente') || v.includes('sub gerente')) return 'Subgerente'
+  if (v.includes('capit')) return 'Capitán'
+  if (v.includes('barman') || v.includes('bartender') || v.includes('barra')) return 'Barman'
+  if (v.includes('cocin')) return 'Cocinero'
+  if (v.includes('meser')) return 'Mesero'
+
+  // Sin match: se devuelve crudo para que el call site aplique el fallback
+  // y deje el logger.warn correspondiente.
+  return (raw || '').trim()
 }
 
 /**
@@ -166,20 +190,12 @@ export default class PublicController {
       test.takenAt = DateTime.now()
       test.answersJson = answers
 
-      let aiReport: any = { note: 'OPENAI_API_KEY no configurada' }
-      let score: number | null = null
-      let passed: boolean | null = null
-
-      if (process.env.OPENAI_API_KEY) {
-        const prompt = buildPsychPrompt(role, answers)
-        aiReport = await gradeExamJson(prompt)
-
-        const scoreNum = Number(aiReport?.score ?? NaN)
-        if (!Number.isNaN(scoreNum)) {
-          score = scoreNum
-          passed = scoreNum >= 82
-        }
-      }
+      // 2026-07-20 — Calificación por eje con rúbrica + evidencia verificada.
+      // Reemplaza el prompt monolítico (los 7 ejes de golpe) que producía ceros
+      // falsos y 50 parejo. Toda la lógica vive en gradePsychExam: elige la vía
+      // por-eje (puestos con tagging) o la legacy con gate de coherencia, arma
+      // el reporte y calcula score/passed. Ver psych_exam_grader.ts.
+      const { aiReport, score, passed } = await gradePsychExam(role, answers, candidate.id)
 
       test.aiReportJson = aiReport
       if (score !== null) test.score = score
