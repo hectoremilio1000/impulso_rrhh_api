@@ -31,6 +31,18 @@ const MODELO_POR_EJE = process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO
 // Umbral de aprobado del psicométrico. Se mantiene el histórico.
 const UMBRAL_APROBADO = 82
 
+// Versión de lo que produce la calificación. Se guarda con cada prueba
+// (evaluationContext) para saber qué reglas generaron cada resultado y no
+// mezclar históricos. Cambiar rúbrica, etiquetado, prompt o modelo = subir la
+// versión correspondiente; nunca recalificar históricos en silencio.
+export const PSYCH_GRADING_VERSION = {
+  grader: 'por-eje-2026-07-22',
+  rubric: 'rubricas-genericas-v1',
+  tagging: 'tagging-v1',
+  model: MODELO_POR_EJE,
+  passThreshold: UMBRAL_APROBADO,
+} as const
+
 export type PsychGradeResult = {
   aiReport: any
   score: number | null

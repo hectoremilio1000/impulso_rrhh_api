@@ -10,6 +10,7 @@ const CandidateAddressMediaController = () =>
   import('#controllers/candidate_address_media_controller')
 const InterviewsController = () => import('#controllers/interviews_controller')
 const PsychTestsController = () => import('#controllers/psych_tests_controller')
+const EvaluationReviewsController = () => import('#controllers/evaluation_reviews_controller')
 const OffersController = () => import('#controllers/offers_controller')
 const PublicController = () => import('#controllers/public_controller')
 
@@ -75,6 +76,14 @@ router
     // ───────── PSYCH TESTS ─────────
     router.post('/candidates/:id/psych-tests', [PsychTestsController, 'store'])
     router.patch('/psych-tests/:id/result', [PsychTestsController, 'result'])
+
+    // ───────── REVISIÓN DE EVALUACIONES (puesto / banco) ─────────
+    // Ver evaluation_reviews_controller.
+    for (const prefix of ['psych-tests', 'practical-tests']) {
+      router.post(`/${prefix}/:id/reassign`, [EvaluationReviewsController, 'reassign'])
+      router.post(`/${prefix}/:id/confirm-role`, [EvaluationReviewsController, 'confirmRole'])
+      router.post(`/${prefix}/:id/grade-reviewed`, [EvaluationReviewsController, 'gradeReviewed'])
+    }
 
     // ───────── OFFERS ─────────
     router.post('/candidates/:id/offers', [OffersController, 'store'])

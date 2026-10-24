@@ -7,37 +7,28 @@ import PsychTest from '#models/psych_test'
 import PracticalTest from '#models/practical_test'
 import { makePublicToken } from '#services/public_token'
 import { DateTime } from 'luxon'
+import { IMPULSO_INSTRUMENT, resolveRoleCode, type RoleCode } from '#services/role_catalog'
 
 // Exportado para test unitario en tests/unit/role_to_code.spec.ts.
-// Mantenerlo co-locado con el único call site (este controlador) —
-// no es servicio de uso general, no merece módulo propio.
 //
-// El check de chef usa `includes('chef')` (no `===` estricto como los
-// demás roles) porque la cadena que escriben los candidatos en el
-// dropdown "Puesto" del flujo /apply tiene 3 variantes vivas en
-// producción: "Chef gerente", "Chef", "Chef y Gerente". El frontend
-// (ExamRunner.roleFromDesiredRole) ya usa includes; este cambio
-// cierra la asimetría histórica que generaba el bug de los 16
-// candidatos chef-mal-clasificados (ver PR Chef0-BE).
-//
-// RIESGO RESIDUAL: si en el futuro se agrega un rol distinto con
-// "chef" como substring (p.ej. "sous chef", "chef de partida") que
-// NO deba mapear a chef_manager, insertar un check === más
-// específico ANTES de este includes (mismo patrón del frontend).
-export function roleToCode(desiredRole: string): string {
-  const v = (desiredRole || '').toLowerCase().trim()
-  if (v === 'mesero') return 'waiter'
-  if (v === 'capitán' || v === 'capitan') return 'captain'
-  if (v === 'cocinero') return 'cook'
-  if (v === 'barman' || v === 'bartender') return 'barman'
-  if (v.includes('chef')) return 'chef_manager'
-  if (v === 'subgerente') return 'assistant_manager'
-  return 'waiter'
+// 2026-10-23 — Delega en role_catalog (fuente única del puesto). Un puesto
+// que no se reconoce devuelve null: /apply responde 422 en vez de asignar el
+// examen de Mesero en silencio (así se evaluaba a "Gerente").
+export function roleToCode(desiredRole: string): RoleCode | null {
+  return resolveRoleCode(desiredRole)
 }
 
 export default class PublicApplyFullController {
-  async apply({ request }: HttpContext) {
+  async apply({ request, response }: HttpContext) {
     const { candidate, jobs } = request.only(['candidate', 'jobs'])
+
+    // El puesto se decide aquí, una sola vez, y queda en testName.
+    const roleCode = roleToCode(String(candidate?.desiredRole ?? ''))
+    if (!roleCode) {
+      return response.unprocessableEntity({
+        error: 'Puesto no reconocido. Elige un puesto de la lista.',
+      })
+    }
 
     const out = await db.transaction(async (trx) => {
       // 1) candidato
@@ -98,7 +89,6 @@ export default class PublicApplyFullController {
         )
       }
 
-      const roleCode = roleToCode(String(c.desiredRole ?? ''))
       const now = DateTime.now()
 
       // 4) psych test (sin cambiar etapa)
@@ -106,6 +96,8 @@ export default class PublicApplyFullController {
         {
           candidateId: c.id,
           testName: `PSYCH_${roleCode.toUpperCase()}_V1`,
+          roleCode,
+          instrument: IMPULSO_INSTRUMENT.psych,
           assignedAt: now,
           accessToken: makePublicToken(),
           notes: null,
@@ -119,6 +111,7 @@ export default class PublicApplyFullController {
           candidateId: c.id,
           roleCode,
           testName: `PRACTICAL_${roleCode.toUpperCase()}_V1`,
+          instrument: IMPULSO_INSTRUMENT.practical,
           assignedAt: now,
           accessToken: makePublicToken(),
         } as any,
