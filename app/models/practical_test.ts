@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import type { ReviewLogEntry } from '#services/role_catalog'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export default class PracticalTest extends BaseModel {
@@ -55,4 +56,25 @@ export default class PracticalTest extends BaseModel {
   @column.dateTime({ columnName: 'created_at', autoCreate: true }) declare createdAt: DateTime
   @column.dateTime({ columnName: 'updated_at', autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+
+  // Ver migración add_review_columns_to_tests y role_catalog.
+  @column() declare instrument?: string | null
+  @column({ columnName: 'bank_fingerprint' }) declare bankFingerprint?: string | null
+  @column({ columnName: 'superseded_by_id' }) declare supersededById?: number | null
+  @column({
+    columnName: 'review_log_json',
+    prepare: (v) => (v === null || v === undefined ? null : JSON.stringify(v)),
+    consume: (v) => {
+      if (v === null || v === undefined) return null
+      if (typeof v === 'string') {
+        try {
+          return JSON.parse(v)
+        } catch {
+          return null
+        }
+      }
+      return v
+    },
+  })
+  declare reviewLogJson: ReviewLogEntry[] | null
 }
