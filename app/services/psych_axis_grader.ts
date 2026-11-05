@@ -37,7 +37,16 @@ export type ResultadoEje = {
   quotesNoVerificadas: string[]
   /** Por qué quedó en null, cuando aplica. */
   motivoPendiente?: string
+  /** Tipo de cada cita verificada, en el mismo orden que `quotes`. */
+  quoteTypes?: TipoCita[]
+  /** La IA marcó una conducta contraria a la competencia. */
+  negativeConduct?: boolean
+  /** Conducta relatada vs. sólo criterio declarado (respuestas hipotéticas). */
+  evidenceType?: TipoEvidenciaEje
 }
+
+export type TipoCita = 'observada' | 'hipotetica' | 'generica'
+export type TipoEvidenciaEje = 'conducta_relatada' | 'solo_criterio_declarado' | null
 
 /** Normaliza para comparar citas: sin acentos, sin puntuación, espacios colapsados. */
 function normalizar(s: string): string {
@@ -73,11 +82,7 @@ export function citaVerificable(cita: string, respuestas: RespuestaEje[]): boole
 }
 
 /** Extrae las respuestas que miden un eje, con su texto de pregunta. */
-export function respuestasDelEje(
-  rol: string,
-  eje: EjeGuidara,
-  answers: any
-): RespuestaEje[] {
+export function respuestasDelEje(rol: string, eje: EjeGuidara, answers: any): RespuestaEje[] {
   const qs = preguntasDelEje(rol, eje)
   const out: RespuestaEje[] = []
   for (const n of qs) {
@@ -93,11 +98,7 @@ export function respuestasDelEje(
   return out
 }
 
-export function buildAxisPrompt(
-  rol: string,
-  eje: EjeGuidara,
-  respuestas: RespuestaEje[]
-): string {
+export function buildAxisPrompt(rol: string, eje: EjeGuidara, respuestas: RespuestaEje[]): string {
   const bloque = respuestas
     .map((r) => `[${r.qid}] ${r.pregunta}\nRESPUESTA: ${r.respuesta}`)
     .join('\n\n')
@@ -123,10 +124,24 @@ PASO 1. Copia TEXTUALMENTE entre 1 y 3 frases de las RESPUESTAS de arriba que
         Estas citas se verifican automáticamente contra el texto original: si
         inventas o parafraseas una cita, la evaluación se descarta.
 
-PASO 2. Compara esas frases contra la RÚBRICA y explica en una o dos líneas a
+PASO 2. Clasifica CADA cita con uno de estos tipos:
+          "observada"  = relata algo que SÍ hizo, con hecho concreto (qué pasó,
+                         qué hizo, cómo terminó). Ej.: "Separé fondo y venta,
+                         revisé pagos por folio y encontré el error".
+          "hipotetica" = dice lo que HARÍA o su criterio, sin relatar un hecho
+                         suyo. Ej.: "Rechazaría la gratificación", "yo buscaría
+                         un cálculo transparente".
+          "generica"   = frase sin conducta ni criterio evaluable: "lo
+                         hablaría", "trato de resolverlo", "depende", "que se
+                         arreglen", "no sé", o una declaración de valores sin
+                         hechos ("para mí la honestidad es lo primero").
+        Una respuesta hipotética NO es conducta comprobada: no la describas
+        como algo que ya hace.
+
+PASO 3. Compara esas frases contra la RÚBRICA y explica en una o dos líneas a
         qué nivel corresponden y por qué.
 
-PASO 3. SÓLO ENTONCES asigna el número (0-100).
+PASO 4. SÓLO ENTONCES asigna el número (0-100).
 
 ════════════════════════════════════════════════════
 LA REGLA MÁS IMPORTANTE — 0 Y "PENDIENTE" NO SON LO MISMO
@@ -143,27 +158,31 @@ es null. Un número inventado hace que se rechace a alguien por error.
 
 CUÁNDO **SÍ** HAY QUE PONER NÚMERO (no te escondas en null):
 
-  · Respuesta CORTA pero con contenido real → CALIFICA. "Cuando el mesero es
-    nuevo o se está atrasando" son 10 palabras y es evidencia perfectamente
-    válida. Una respuesta breve y pobre va en la banda BAJA — no en null.
-  · Respuesta GENÉRICA pero pertinente ("hay que escuchar al cliente") →
-    CALIFICA en la banda MEDIA o BAJA. Ser genérico es un dato, no una ausencia.
+  · Respuesta CORTA pero con contenido real (una acción, un criterio o un hecho
+    concreto) → CALIFICA. "Cuando el mesero es nuevo o se está atrasando" son
+    10 palabras y es evidencia válida. Breve y pobre va en la banda BAJA.
   · La respuesta habla del tema aunque no calce exacto con los ejemplos de la
     rúbrica → CALIFICA usando el ancla más cercana.
 
-null se reserva SÓLO para estos casos:
-  · Respuestas vacías o basura tecleada ("O", "oo", "asdf", un punto).
-  · Respuestas que hablan de algo completamente ajeno a esta competencia.
+null ("evidencia insuficiente") cuando:
+  · TODAS las citas que encuentras son "generica": vaguedad no es evidencia de
+    que sea malo ni de que sea bueno.
+  · Respuestas vacías, basura tecleada o ajenas a esta competencia.
 
-Regla práctica: si puedes copiar una frase con sentido, entonces PUEDES
-calificar. Evalúa lo que DICE, no cuánto escribe.
+Puntajes de 20 o menos SÓLO si alguna cita describe o acepta una conducta
+contraria a la competencia (encubrir, aceptar un beneficio personal, humillar,
+culpar sistemáticamente, abandonar un estándar). Marca entonces
+"negative_conduct": true. Una respuesta vaga NUNCA es conducta negativa.
+
+Evalúa lo que DICE, no cuánto escribe ni cómo lo escribe.
 
 ════════════════════════════════════════════════════
 
 Devuelve SOLO este JSON, sin markdown:
 
 {
-  "quotes": ["cita textual 1", "cita textual 2"],
+  "quotes": [{ "text": "cita textual 1", "type": "observada" }, { "text": "cita textual 2", "type": "hipotetica" }],
+  "negative_conduct": false,
   "reasoning": "en qué nivel de la rúbrica caen esas frases y por qué",
   "score": <número 0-100, o null si no hay evidencia>
 }`
@@ -202,12 +221,39 @@ export async function gradeAxis(
     }
   }
 
-  const quotes: string[] = Array.isArray(raw.quotes) ? raw.quotes.map((q: any) => String(q)) : []
-  const verificadas = quotes.filter((q) => citaVerificable(q, respuestas))
+  return interpretarRespuestaIA(eje, raw, respuestas)
+}
+
+/**
+ * Reglas sobre la respuesta de la IA (pura, probada sin OpenAI):
+ * citas verificables, tipo de cada cita, evidencia insuficiente y conducta
+ * negativa obligatoria para 20 o menos.
+ */
+export function interpretarRespuestaIA(
+  eje: EjeGuidara,
+  raw: any,
+  respuestas: RespuestaEje[]
+): ResultadoEje {
+  const tipadas: { text: string; type: TipoCita }[] = Array.isArray(raw.quotes)
+    ? raw.quotes.map((q: any) =>
+        typeof q === 'string'
+          ? { text: q, type: 'generica' as TipoCita }
+          : { text: String(q?.text ?? ''), type: normTipo(q?.type) }
+      )
+    : []
+  const quotes = tipadas.map((q) => q.text)
+  const verificadasT = tipadas.filter((q) => citaVerificable(q.text, respuestas))
+  const verificadas = verificadasT.map((q) => q.text)
   const inventadas = quotes.filter((q) => !citaVerificable(q, respuestas))
   const scoreNum = raw.score === null || raw.score === undefined ? null : Number(raw.score)
   const scoreValido =
     scoreNum !== null && Number.isFinite(scoreNum) && scoreNum >= 0 && scoreNum <= 100
+  const conEvidencia = verificadasT.filter((q) => q.type !== 'generica')
+  const evidenceType: TipoEvidenciaEje = conEvidencia.some((q) => q.type === 'observada')
+    ? 'conducta_relatada'
+    : conEvidencia.length
+      ? 'solo_criterio_declarado'
+      : null
 
   // Sin cita verificable no se puntúa. Es la defensa central: el modelo no
   // puede afirmar "respuesta insuficiente" ni inventar un número sin respaldo.
@@ -225,6 +271,22 @@ export async function gradeAxis(
     }
   }
 
+  // Vaguedad no es evidencia de nada: si todas las citas son genéricas, el eje
+  // queda Pendiente (evidencia insuficiente), no con un número bajo.
+  if (conEvidencia.length === 0) {
+    return {
+      eje,
+      score: null,
+      evidence:
+        'Evidencia insuficiente: las respuestas son genéricas y no muestran conducta ni criterio evaluable.',
+      quotes: verificadas,
+      quotesNoVerificadas: inventadas,
+      quoteTypes: verificadasT.map((q) => q.type),
+      motivoPendiente: 'evidencia_insuficiente',
+      evidenceType: null,
+    }
+  }
+
   if (!scoreValido) {
     return {
       eje,
@@ -232,18 +294,51 @@ export async function gradeAxis(
       evidence: String(raw.reasoning ?? '').slice(0, 500),
       quotes: verificadas,
       quotesNoVerificadas: inventadas,
+      quoteTypes: verificadasT.map((q) => q.type),
       motivoPendiente: 'score_ausente_o_invalido',
+      evidenceType,
+    }
+  }
+
+  // 20 o menos = "hay evidencia de que es malo": exige una conducta negativa
+  // explícita. Sin ella el número no se sostiene y el eje queda Pendiente.
+  if (scoreNum! <= 20 && raw.negative_conduct !== true) {
+    return {
+      eje,
+      score: null,
+      evidence:
+        'Puntaje muy bajo sin conducta negativa citada: se deja como evidencia insuficiente.',
+      quotes: verificadas,
+      quotesNoVerificadas: inventadas,
+      quoteTypes: verificadasT.map((q) => q.type),
+      motivoPendiente: 'bajo_sin_conducta_negativa',
+      evidenceType,
     }
   }
 
   const razon = String(raw.reasoning ?? '').trim()
+  const etiqueta =
+    evidenceType === 'solo_criterio_declarado'
+      ? ' [Sólo criterio declarado (respuestas hipotéticas): falta comprobar con conducta real]'
+      : ''
   return {
     eje,
     score: scoreNum,
-    evidence: `"${verificadas[0]}"${razon ? ` — ${razon}` : ''}`.slice(0, 600),
+    // Sin cortar: la explicación completa es parte de la evidencia del reporte.
+    evidence: `"${verificadas[0]}"${razon ? ` — ${razon}` : ''}${etiqueta}`,
     quotes: verificadas,
     quotesNoVerificadas: inventadas,
+    quoteTypes: verificadasT.map((q) => q.type),
+    negativeConduct: raw.negative_conduct === true,
+    evidenceType,
   }
+}
+
+function normTipo(t: unknown): TipoCita {
+  const s = String(t ?? '').toLowerCase()
+  if (s.startsWith('observ')) return 'observada'
+  if (s.startsWith('hipot')) return 'hipotetica'
+  return 'generica'
 }
 
 export const EJES_EVALUABLES: EjeGuidara[] = [
@@ -276,7 +371,12 @@ export async function gradeAllAxes(
     conocimientos_practicos: { score: null, evidence: 'evaluado en el examen práctico' },
   }
   for (const r of detalle) {
-    competenciesGuidara[r.eje] = { score: r.score, evidence: r.evidence }
+    competenciesGuidara[r.eje] = {
+      score: r.score,
+      evidence: r.evidence,
+      evidenceType: r.evidenceType ?? null,
+      motivoPendiente: r.motivoPendiente ?? null,
+    }
   }
 
   return { competenciesGuidara, detalle }

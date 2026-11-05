@@ -7,6 +7,7 @@ import type Candidate from '#models/candidate'
 import { gradePsychExam, PSYCH_GRADING_VERSION } from '#services/psych_exam_grader'
 import { gradePracticalExam, PRACTICAL_GRADING_VERSION } from '#services/practical_grader'
 import { fingerprintAnswers } from '#services/bank_fingerprint'
+import { setStageTx } from '#services/stage_service'
 import {
   CURRENT_BANK_FINGERPRINT,
   ROLE_LABEL_ES,
@@ -42,20 +43,47 @@ export async function submitExam(input: {
   const { kind, test, candidate, answers, shownRoleCode } = input
   const fingerprint = fingerprintAnswers(answers)
 
-  // Hora del servidor de base de datos, igual que los defaults de las tablas.
+  // Hora de la app, igual que la escribía el modelo antes (no CURRENT_TIMESTAMP:
+  // la base de producción está en otra zona y desfasaría taken_at contra el
+  // histórico).
+  const now = DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss')
   const result = await db
     .from(TABLE[kind])
     .where('id', test.id)
     .whereNull('taken_at')
     .update({
-      taken_at: db.knexRawQuery('CURRENT_TIMESTAMP'),
+      taken_at: now,
       answers_json: JSON.stringify(answers),
       bank_fingerprint: fingerprint,
-      updated_at: db.knexRawQuery('CURRENT_TIMESTAMP'),
+      updated_at: now,
     })
   const affected = Array.isArray(result) ? Number(result[0]) : Number(result)
   if (!affected) return 'duplicate'
   await test.refresh()
+
+  // Hecho comprobable: el candidato envió su examen. Mueve la etapa sólo hacia
+  // adelante. La calificación de la IA no mueve etapas.
+  try {
+    await setStageTx(
+      candidate.id,
+      {
+        stageCode: 'evaluation_submitted',
+        ...(kind === 'psych' ? { psychTestId: test.id } : {}),
+        testName: test.testName,
+        restaurantId: candidate.restaurantId ?? null,
+        externalRef: `exam:${kind}:${test.id}`,
+        via: 'candidato',
+        notes: kind === 'psych' ? 'Psicométrico enviado' : 'Práctico enviado',
+        advanceOnly: true,
+      },
+      null
+    )
+  } catch (err: any) {
+    logger.error(
+      { kind, testId: test.id, err: err?.message },
+      'submitExam: no se registró la etapa'
+    )
+  }
 
   const decision = decideEvaluationRole({
     kind,
@@ -123,7 +151,10 @@ export async function gradeAndSave(input: {
     test.score = graded.score
     test.passed = graded.passed
   } catch (err: any) {
-    logger.error({ kind, testId: test.id, err: err?.message }, 'gradeAndSave: falló la calificación')
+    logger.error(
+      { kind, testId: test.id, err: err?.message },
+      'gradeAndSave: falló la calificación'
+    )
     test.aiReportJson = {
       status: 'grading_failed',
       note: 'Respuestas guardadas; la calificación falló y puede repetirse desde el admin.',
@@ -135,7 +166,8 @@ export async function gradeAndSave(input: {
 export function testRoleInput(kind: ExamKind, test: AnyTest) {
   return {
     instrument: test.instrument ?? null,
-    roleCode: kind === 'psych' ? ((test as PsychTest).roleCode ?? null) : (test as PracticalTest).roleCode,
+    roleCode:
+      kind === 'psych' ? ((test as PsychTest).roleCode ?? null) : (test as PracticalTest).roleCode,
     testName: test.testName,
     supersededById: test.supersededById ?? null,
     reviewLog: test.reviewLogJson ?? null,

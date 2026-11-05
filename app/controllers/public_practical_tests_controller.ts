@@ -2,6 +2,8 @@ import type { HttpContext } from '@adonisjs/core/http'
 import PracticalTest from '#models/practical_test'
 import Candidate from '#models/candidate'
 import { submitExam } from '#services/exam_submission'
+import { examPassGate } from '#controllers/public_passes_controller'
+import { closeIfComplete } from '#services/evaluation_pass'
 import {
   PUBLIC_DUPLICATE_RESPONSE,
   PUBLIC_SUBMIT_RESPONSE,
@@ -16,20 +18,26 @@ export default class PublicPracticalTestsController {
       .orderBy('id', 'desc')
     return rows
   }
-  async show({ params, response }: HttpContext) {
+  async show(ctx: HttpContext) {
+    const { params, response } = ctx
     const token = String(params.token || '')
     const test = await PracticalTest.query().where('access_token', token).first()
     if (!test) return response.notFound({ error: 'Link inválido' })
+    const gate = await examPassGate(ctx, test)
+    if (!gate.ok) return response.status(gate.status).send(gate.body)
 
     const c = await Candidate.findOrFail(test.candidateId)
     return publicExamView('practical', test, c)
   }
 
-  async submit({ params, request, response }: HttpContext) {
+  async submit(ctx: HttpContext) {
+    const { params, request, response } = ctx
     try {
       const token = String(params.token || '')
       const test = await PracticalTest.query().where('access_token', token).first()
       if (!test) return response.notFound({ error: 'Link inválido' })
+      const gate = await examPassGate(ctx, test)
+      if (!gate.ok) return response.status(gate.status).send(gate.body)
       // 2026-10-23 — Antes no había este control: un segundo envío pisaba las
       // respuestas y generaba otra calificación.
       if (test.takenAt) return response.status(409).send(PUBLIC_DUPLICATE_RESPONSE)
@@ -46,12 +54,15 @@ export default class PublicPracticalTestsController {
         shownRoleCode: request.input('roleCode') ?? null,
       })
       if (outcome === 'duplicate') return response.status(409).send(PUBLIC_DUPLICATE_RESPONSE)
+      if (test.evaluationPassId) await closeIfComplete(test.evaluationPassId)
 
       // El resultado es para el reclutador, no para el candidato.
       return PUBLIC_SUBMIT_RESPONSE
     } catch (err: any) {
       console.log('PublicPracticalTestsController.submit error:', err?.message || err)
-      return response.status(500).send({ error: 'No pudimos guardar tus respuestas. Intenta de nuevo.' })
+      return response
+        .status(500)
+        .send({ error: 'No pudimos guardar tus respuestas. Intenta de nuevo.' })
     }
   }
 }

@@ -1,7 +1,9 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Candidate from '#models/candidate'
 import Stage from '#models/stage'
-import { setStageTx } from '#services/stage_service'
+import { setStageTx, EVIDENCE_STAGES } from '#services/stage_service'
+import { currentUser } from '#services/actor'
+import { DateTime } from 'luxon'
 
 export default class CandidatesController {
   async index({ request }: HttpContext) {
@@ -99,7 +101,7 @@ export default class CandidatesController {
       .preload('offers')
       .preload('psychTests')
       .preload('examAssignments')
-      .preload('stageEvents', (q) => q.orderBy('at', 'desc'))
+      .preload('stageEvents', (q) => q.orderBy('at', 'desc').orderBy('id', 'desc').preload('stage'))
       .firstOrFail()
   }
 
@@ -127,14 +129,25 @@ export default class CandidatesController {
       'mapsPlaceId',
       'source',
       'notes',
+      'restaurantId',
+      'commuteMinutesApprox',
+      'scheduleAvailability',
+      'acceptsVacancyConditions',
+      'vacancyConditionsSeen',
     ])
     c.merge(body)
+    if (body.acceptsVacancyConditions !== undefined) c.conditionsAnsweredAt = DateTime.now()
     await c.save()
     return c
   }
 
   // PATCH /api/candidates/:id/stage
-  async setStage({ params, request, response }: HttpContext) {
+  //
+  // Las etapas que dependen de un hecho comprobable (llegó, entrevistado,
+  // evaluación presentada, oferta aceptada, contratado, baja) no se ponen a
+  // mano: se registran con su propia acción, que guarda fecha y responsable.
+  async setStage(ctx: HttpContext) {
+    const { params, request, response } = ctx
     const candidateId = Number(params.id)
     const payload = request.only([
       'stageId',
@@ -155,8 +168,21 @@ export default class CandidatesController {
       'reasonCode',
     ])
 
+    let code = payload.stageCode as string | undefined
+    if (!code && payload.stageId) {
+      const stage = await Stage.find(payload.stageId)
+      code = stage?.code
+    }
+    if (code && EVIDENCE_STAGES[code]) {
+      return response.unprocessableEntity({ error: EVIDENCE_STAGES[code], stageCode: code })
+    }
+
     try {
-      const res = await setStageTx(candidateId, payload, null)
+      const res = await setStageTx(
+        candidateId,
+        { ...payload, via: payload.via ?? 'panel' },
+        currentUser(ctx)?.id ?? null
+      )
       return res
     } catch (e: any) {
       return response.badRequest({ error: e.message })

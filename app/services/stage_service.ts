@@ -21,6 +21,29 @@ type Input = {
   offerId?: number | null
   decision?: string | null
   reasonCode?: string | null
+  restaurantId?: number | null
+  // Id del evento en el sistema de origen (p. ej. WhatsApp): el mismo evento
+  // no se registra dos veces.
+  externalRef?: string | null
+  // Eventos automáticos: se registran siempre, pero sólo mueven la etapa
+  // actual si es posterior (un evento atrasado no regresa al candidato).
+  advanceOnly?: boolean
+  // Sólo deja historial (p. ej. una cita cancelada); no mueve la etapa.
+  recordOnly?: boolean
+}
+
+// Etapas que sólo se alcanzan con un evento comprobable registrado por su
+// propia acción (con fecha, restaurante y responsable), nunca a mano ni por
+// una recomendación de la IA.
+export const EVIDENCE_STAGES: Record<string, string> = {
+  arrived: 'Se registra cuando recepción marca la llegada a la cita.',
+  no_show: 'Se registra cuando recepción marca que no llegó a la cita.',
+  interviewed: 'Registra la entrevista realizada (fecha y entrevistador).',
+  evaluation_submitted: 'Se registra sola cuando el candidato envía su examen.',
+  offer_accepted: 'Se registra cuando el candidato acepta la oferta.',
+  offer_declined: 'Se registra cuando el candidato rechaza la oferta.',
+  hired: 'Registra la contratación (fecha de ingreso, restaurante y responsable).',
+  exited: 'Registra la salida (fecha, tipo y motivo).',
 }
 
 function toDateTime(v?: string | Date | null) {
@@ -66,8 +89,24 @@ export async function setStageTx(candidateId: number, input: Input, createdBy?: 
       }
     }
 
-    candidate.currentStageId = stage.id
-    await candidate.save()
+    if (input.externalRef) {
+      const dup = await CandidateStageEvent.query({ client: trx })
+        .where('external_ref', input.externalRef)
+        .first()
+      if (dup) return { ok: true, candidateId, stageId: dup.stageId, duplicate: true }
+    }
+
+    let moved = !input.recordOnly
+    if (moved && input.advanceOnly && candidate.currentStageId) {
+      const current = await Stage.query({ client: trx })
+        .where('id', candidate.currentStageId)
+        .first()
+      moved = !current || stage.sortOrder > current.sortOrder
+    }
+    if (moved) {
+      candidate.currentStageId = stage.id
+      await candidate.save()
+    }
 
     await CandidateStageEvent.create(
       {
@@ -93,10 +132,12 @@ export async function setStageTx(candidateId: number, input: Input, createdBy?: 
         offerId: input.offerId ?? null,
         decision: input.decision ?? null,
         reasonCode: input.reasonCode ?? null,
+        restaurantId: input.restaurantId ?? null,
+        externalRef: input.externalRef ?? null,
       },
       { client: trx }
     )
 
-    return { ok: true, candidateId, stageId: stage.id }
+    return { ok: true, candidateId, stageId: stage.id, moved }
   })
 }

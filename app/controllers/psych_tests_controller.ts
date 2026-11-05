@@ -32,19 +32,31 @@ export default class PsychTestsController {
     let testName = String(payload.testName || '').trim()
     const instrument =
       payload.instrument === 'external' ||
-      (payload.instrument !== IMPULSO_INSTRUMENT.psych && testName && !roleCodeFromTestName(testName))
+      (payload.instrument !== IMPULSO_INSTRUMENT.psych &&
+        testName &&
+        !roleCodeFromTestName(testName))
         ? 'external'
         : IMPULSO_INSTRUMENT.psych
     let roleCode: RoleCode | null = null
     if (instrument === 'external') {
-      if (!testName) return response.badRequest({ error: 'testName es requerido para un instrumento externo' })
+      if (!testName)
+        return response.badRequest({ error: 'testName es requerido para un instrumento externo' })
     } else {
       // Un puesto pedido explícitamente y no válido se rechaza; no se
       // sustituye en silencio por el puesto actual del candidato.
-      if (payload.roleCode !== undefined && payload.roleCode !== null && !toRoleCode(payload.roleCode)) {
-        return response.unprocessableEntity({ error: `Puesto no válido: ${String(payload.roleCode)}` })
+      if (
+        payload.roleCode !== undefined &&
+        payload.roleCode !== null &&
+        !toRoleCode(payload.roleCode)
+      ) {
+        return response.unprocessableEntity({
+          error: `Puesto no válido: ${String(payload.roleCode)}`,
+        })
       }
-      roleCode = toRoleCode(payload.roleCode) ?? roleCodeFromTestName(testName) ?? resolveRoleCode(c.desiredRole)
+      roleCode =
+        toRoleCode(payload.roleCode) ??
+        roleCodeFromTestName(testName) ??
+        resolveRoleCode(c.desiredRole)
       if (!roleCode) {
         return response.unprocessableEntity({
           error: 'Define un puesto válido para el candidato antes de asignar el psicométrico.',

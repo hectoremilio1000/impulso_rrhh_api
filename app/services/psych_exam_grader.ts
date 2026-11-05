@@ -36,7 +36,9 @@ const UMBRAL_APROBADO = 82
 // mezclar históricos. Cambiar rúbrica, etiquetado, prompt o modelo = subir la
 // versión correspondiente; nunca recalificar históricos en silencio.
 export const PSYCH_GRADING_VERSION = {
-  grader: 'por-eje-2026-07-22',
+  // 2026-10-26: citas tipificadas (observada/hipotética/genérica); lo genérico
+  // queda como evidencia insuficiente y 20 o menos exige conducta negativa.
+  grader: 'por-eje-2026-10-26',
   rubric: 'rubricas-genericas-v1',
   tagging: 'tagging-v1',
   model: MODELO_POR_EJE,
@@ -106,6 +108,9 @@ export async function gradePsychExam(
         eje: d.eje,
         score: d.score,
         quotes: d.quotes,
+        quoteTypes: d.quoteTypes ?? [],
+        evidenceType: d.evidenceType ?? null,
+        negativeConduct: d.negativeConduct ?? false,
         motivoPendiente: d.motivoPendiente,
       })),
     }
@@ -145,7 +150,7 @@ export async function gradePsychExam(
     aiReport = sanitizePsychReport(aiReport, validation)
   }
 
-  const scoreNum = Number(aiReport?.score ?? NaN)
+  const scoreNum = Number(aiReport?.score ?? Number.NaN)
   const score = Number.isNaN(scoreNum) ? null : scoreNum
   return {
     aiReport,

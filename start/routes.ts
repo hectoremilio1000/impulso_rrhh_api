@@ -18,6 +18,12 @@ const PreviousJobsController = () => import('#controllers/previous_jobs_controll
 const PublicApplyFullController = () => import('#controllers/public_apply_full_controller')
 const PublicPracticalTestsController = () =>
   import('#controllers/public_practical_tests_controller')
+const AuthController = () => import('#controllers/auth_controller')
+const EmploymentsController = () => import('#controllers/employments_controller')
+const LookupsController = () => import('#controllers/lookups_controller')
+const PublicPassesController = () => import('#controllers/public_passes_controller')
+const EvaluationPassesController = () => import('#controllers/evaluation_passes_controller')
+const InternalRecruitmentController = () => import('#controllers/internal_recruitment_controller')
 
 // Health simple para DB (sin auth; Railway lo necesita)
 router.get('/health-db', async () => {
@@ -37,17 +43,52 @@ router
     router.post('/public/offers/:token/respond', [PublicController, 'offerRespond'])
 
     router.post('/public/apply-full', [PublicApplyFullController, 'apply'])
+
+    // Pase presencial (lado del candidato). Abrir no reclama: "Comenzar" sí.
+    router.get('/public/passes/code/:code', [PublicPassesController, 'byCode'])
+    router.get('/public/passes/:token', [PublicPassesController, 'preview'])
+    router.post('/public/passes/:token/claim', [PublicPassesController, 'claim'])
+    router.get('/public/passes/:token/state', [PublicPassesController, 'state'])
+    router.put('/public/passes/:token/progress', [PublicPassesController, 'progress'])
+    router.post('/public/passes/:token/apply', [PublicPassesController, 'apply'])
+    router.post('/public/passes/:token/release', [PublicPassesController, 'release'])
     router.get('/public/practical-tests/:token', [PublicPracticalTestsController, 'show'])
     router.post('/public/practical-tests/:token/submit', [PublicPracticalTestsController, 'submit'])
   })
   .prefix('/api')
 
+// Inicio de sesión del panel (usuario y contraseña → token personal).
+router.post('/api/auth/login', [AuthController, 'login'])
+
+// Servidor a servidor (token de servicio propio).
+router
+  .post('/api/internal/recruitment/events', [InternalRecruitmentController, 'event'])
+  .use(middleware.serviceToken())
+
 // ═════════════════════════════════════════════════════════════════════
-// ADMIN — exige X-Admin-Token (fail-closed si la env no está)
-// Reemplazar por @adonisjs/auth en Fase 2.
+// ADMIN — sesión de usuario (Bearer). La llave compartida X-Admin-Token sólo
+// se acepta mientras ADMIN_GATE_TOKEN exista (transición; ver middleware).
 // ═════════════════════════════════════════════════════════════════════
 router
   .group(() => {
+    router.get('/auth/me', [AuthController, 'me'])
+    router.post('/auth/logout', [AuthController, 'logout'])
+    router.get('/restaurants', [LookupsController, 'restaurants'])
+    router.patch('/restaurants/:id/rrhh-settings', [EvaluationPassesController, 'settings'])
+
+    // ───────── PASE PRESENCIAL (recepción) ─────────
+    router.get('/evaluation-passes', [EvaluationPassesController, 'index'])
+    router.post('/evaluation-passes', [EvaluationPassesController, 'store'])
+    router.get('/evaluation-passes/:id/events', [EvaluationPassesController, 'events'])
+    router.post('/evaluation-passes/:id/reissue', [EvaluationPassesController, 'reissue'])
+    router.get('/users', [LookupsController, 'users'])
+
+    // ───────── CONTRATACIÓN, SALIDA Y SEGUIMIENTO ─────────
+    router.get('/candidates/:id/employments', [EmploymentsController, 'index'])
+    router.post('/candidates/:id/employments', [EmploymentsController, 'store'])
+    router.post('/employments/:id/exit', [EmploymentsController, 'exit'])
+    router.post('/employments/:id/checks', [EmploymentsController, 'check'])
+
     // ───────── CANDIDATES ─────────
     router.get('/candidates', [CandidatesController, 'index'])
     router.post('/candidates', [CandidatesController, 'store'])

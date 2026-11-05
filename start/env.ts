@@ -49,4 +49,7 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   /* ---------- Admin gate (temp, Fase 1 cierre PII) ---------- */
   ADMIN_GATE_TOKEN: Env.schema.string.optional(),
+
+  /* ---------- Servidor a servidor: WhatsApp de reclutamiento ---------- */
+  RECRUITMENT_SERVICE_TOKEN: Env.schema.string.optional(),
 })

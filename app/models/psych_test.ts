@@ -75,6 +75,20 @@ export default class PsychTest extends BaseModel {
   })
   declare reviewLogJson: ReviewLogEntry[] | null
 
+  // Pase presencial: si existe, el examen sólo se abre con la sesión del pase.
+  @column({ columnName: 'evaluation_pass_id' }) declare evaluationPassId?: number | null
+  // Avance guardado en el servidor mientras no se envía (no son respuestas
+  // finales: no se califican).
+  @column({
+    columnName: 'draft_json',
+    serializeAs: null,
+    prepare: (v) => (v === null || v === undefined ? null : JSON.stringify(v)),
+    consume: (v) => (typeof v === 'string' ? JSON.parse(v) : (v ?? null)),
+  })
+  declare draftJson?: Record<string, string> | null
+  @column.dateTime({ columnName: 'draft_updated_at', serializeAs: null })
+  declare draftUpdatedAt?: DateTime | null
+
   @column.dateTime({ columnName: 'created_at' }) declare createdAt: DateTime
   @column.dateTime({ columnName: 'updated_at' }) declare updatedAt: DateTime
 

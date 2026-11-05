@@ -3,10 +3,13 @@ import Offer from '#models/offer'
 import Candidate from '#models/candidate'
 import { setStageTx } from '#services/stage_service'
 import { makePublicToken } from '#services/public_token'
+import { requireUser } from '#services/actor'
 
 export default class OffersController {
   // POST /api/candidates/:id/offers
-  async store({ params, request, response }: HttpContext) {
+  async store(ctx: HttpContext) {
+    const { params, request, response } = ctx
+    const user = requireUser(ctx)
     const candidateId = Number(params.id)
     const c = await Candidate.find(candidateId)
     if (!c) return response.notFound({ error: 'Candidate not found' })
@@ -17,6 +20,7 @@ export default class OffersController {
       'roleOffered',
       'startDate',
       'notes',
+      'restaurantId',
     ])
 
     const offer = await Offer.create({
@@ -28,6 +32,8 @@ export default class OffersController {
       publicToken: makePublicToken(),
       status: 'made',
       notes: body.notes ?? null,
+      restaurantId: body.restaurantId ?? c.restaurantId ?? null,
+      createdByUserId: user.id,
     })
 
     await setStageTx(
@@ -36,27 +42,37 @@ export default class OffersController {
         stageCode: 'offer_made',
         offerId: offer.id,
         decision: 'offer_made',
+        restaurantId: offer.restaurantId ?? null,
+        via: 'panel',
         notes: 'Oferta realizada',
       },
-      null
+      user.id
     )
 
     return offer
   }
 
   // PATCH /api/offers/:id  (status: made|accepted|declined)
-  async update({ params, request }: HttpContext) {
+  //
+  // Aceptar una oferta NO es contratar: la contratación se registra aparte,
+  // con la fecha de ingreso (POST /candidates/:id/employments).
+  async update(ctx: HttpContext) {
+    const { params, request, response } = ctx
+    const user = requireUser(ctx)
     const offer = await Offer.findOrFail(params.id)
     const status = String(request.input('status') || offer.status)
     const notes = request.input('notes') ?? null
+    if (!['made', 'accepted', 'declined'].includes(status)) {
+      return response.badRequest({ error: 'status: made, accepted o declined' })
+    }
 
     offer.status = status
     if (notes !== null) offer.notes = notes
     await offer.save()
 
     const map: Record<string, string> = {
-      accepted: 'hired',
-      declined: 'rejected',
+      accepted: 'offer_accepted',
+      declined: 'offer_declined',
       made: 'offer_made',
     }
     const stageCode = map[status] || 'offer_made'
@@ -67,9 +83,11 @@ export default class OffersController {
         stageCode,
         offerId: offer.id,
         decision: stageCode,
+        restaurantId: offer.restaurantId ?? null,
+        via: 'panel',
         notes,
       },
-      null
+      user.id
     )
 
     return offer

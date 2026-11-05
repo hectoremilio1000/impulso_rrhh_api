@@ -38,6 +38,8 @@ export default class CandidateStageEvent extends BaseModel {
   @column({ columnName: 'offer_id' }) declare offerId?: number | null
   @column() declare decision?: string | null
   @column({ columnName: 'reason_code' }) declare reasonCode?: string | null
+  @column({ columnName: 'restaurant_id' }) declare restaurantId?: number | null
+  @column({ columnName: 'external_ref' }) declare externalRef?: string | null
 
   @column() declare notes?: string | null
   @column() declare extra?: any

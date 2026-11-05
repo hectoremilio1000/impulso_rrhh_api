@@ -48,6 +48,19 @@ export default class Candidate extends BaseModel {
   // Origen y stage
   @column() declare source?: string | null
   @column({ columnName: 'current_stage_id' }) declare currentStageId?: number | null
+  @column({ columnName: 'restaurant_id' }) declare restaurantId?: number | null
+
+  // Datos de permanencia declarados por el candidato (descriptivos; no
+  // descartan en automático).
+  @column({ columnName: 'commute_minutes_approx' }) declare commuteMinutesApprox?: number | null
+  @column({ columnName: 'schedule_availability' }) declare scheduleAvailability?: string | null
+  @column({ columnName: 'accepts_vacancy_conditions' })
+  declare acceptsVacancyConditions?: boolean | null
+  @column({ columnName: 'vacancy_conditions_seen' }) declare vacancyConditionsSeen?: string | null
+  @column.dateTime({ columnName: 'conditions_answered_at' })
+  declare conditionsAnsweredAt?: DateTime | null
+  @column.dateTime({ columnName: 'privacy_consent_at' }) declare privacyConsentAt?: DateTime | null
+  @column({ columnName: 'privacy_consent_version' }) declare privacyConsentVersion?: string | null
   @belongsTo(() => Stage, { foreignKey: 'currentStageId' }) declare currentStage: BelongsTo<
     typeof Stage
   >

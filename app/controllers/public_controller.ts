@@ -8,6 +8,8 @@ import Offer from '#models/offer'
 import { setStageTx } from '#services/stage_service'
 import { ROLE_LABEL_ES, resolveRoleCode } from '#services/role_catalog'
 import { submitExam } from '#services/exam_submission'
+import { examPassGate } from '#controllers/public_passes_controller'
+import { closeIfComplete } from '#services/evaluation_pass'
 import {
   PUBLIC_DUPLICATE_RESPONSE,
   PUBLIC_SUBMIT_RESPONSE,
@@ -112,10 +114,13 @@ export default class PublicController {
   }
 
   // GET /api/public/psych-tests/:token
-  async psychShow({ params, response }: HttpContext) {
+  async psychShow(ctx: HttpContext) {
+    const { params, response } = ctx
     const token = String(params.token || '')
     const test = await PsychTest.query().where('access_token', token).first()
     if (!test) return response.notFound({ error: 'Link inválido' })
+    const gate = await examPassGate(ctx, test)
+    if (!gate.ok) return response.status(gate.status).send(gate.body)
 
     const candidate = await Candidate.findOrFail(test.candidateId)
     return publicExamView('psych', test, candidate)
@@ -124,11 +129,14 @@ export default class PublicController {
   // POST /api/public/psych-tests/:token/submit
   // body: { answers: any }
   // POST /api/public/psych-tests/:token/submit
-  async psychSubmit({ params, request, response }: HttpContext) {
+  async psychSubmit(ctx: HttpContext) {
+    const { params, request, response } = ctx
     try {
       const token = String(params.token || '')
       const test = await PsychTest.query().where('access_token', token).first()
       if (!test) return response.notFound({ error: 'Link inválido' })
+      const gate = await examPassGate(ctx, test)
+      if (!gate.ok) return response.status(gate.status).send(gate.body)
 
       if (test.takenAt) return response.status(409).send(PUBLIC_DUPLICATE_RESPONSE)
 
@@ -146,12 +154,15 @@ export default class PublicController {
         shownRoleCode: request.input('roleCode') ?? null,
       })
       if (outcome === 'duplicate') return response.status(409).send(PUBLIC_DUPLICATE_RESPONSE)
+      if (test.evaluationPassId) await closeIfComplete(test.evaluationPassId)
 
       // El resultado es para el reclutador, no para el candidato.
       return PUBLIC_SUBMIT_RESPONSE
     } catch (err: any) {
       logger.error({ err: err?.message }, 'PublicController.psychSubmit error')
-      return response.status(500).send({ error: 'No pudimos guardar tus respuestas. Intenta de nuevo.' })
+      return response
+        .status(500)
+        .send({ error: 'No pudimos guardar tus respuestas. Intenta de nuevo.' })
     }
   }
 
@@ -190,11 +201,23 @@ export default class PublicController {
     offer.respondedIp = request.ip()
     await offer.save()
 
-    // Esto sí cambia etapa (porque ya es decisión final)
-    const stageCode = decision === 'accept' ? 'hired' : 'rejected'
+    // Aceptar la oferta no es contratar: la contratación se registra cuando
+    // la persona empieza a trabajar (EmploymentsController.store).
+    const stageCode = decision === 'accept' ? 'offer_accepted' : 'offer_declined'
     await setStageTx(
       offer.candidateId,
-      { stageCode, offerId: offer.id, decision: stageCode, notes: `Oferta ${offer.status}` },
+      {
+        stageCode,
+        offerId: offer.id,
+        decision: stageCode,
+        restaurantId: offer.restaurantId ?? null,
+        via: 'candidato',
+        notes:
+          decision === 'accept'
+            ? 'El candidato aceptó la oferta'
+            : 'El candidato rechazó la oferta',
+        advanceOnly: true,
+      },
       null
     )
 

@@ -58,7 +58,8 @@ export default class EvaluationReviewsController {
     const kind = this.kindFrom(request)
     const { reason, roleCode } = parseBody(request)
     if (!roleCode) return response.badRequest({ error: 'roleCode válido es requerido' })
-    if (reason.length < MIN_REASON) return response.badRequest({ error: 'Escribe el motivo (mínimo 10 caracteres)' })
+    if (reason.length < MIN_REASON)
+      return response.badRequest({ error: 'Escribe el motivo (mínimo 10 caracteres)' })
 
     const Model = modelFor(kind)
     const old = await Model.find(Number(params.id))
@@ -73,6 +74,9 @@ export default class EvaluationReviewsController {
         instrument: IMPULSO_INSTRUMENT[kind],
         assignedAt: DateTime.now(),
         accessToken: makePublicToken(),
+        // Un examen presencial reasignado sigue dentro de su pase: se presenta
+        // en el restaurante, con la sesión del pase (recepción lo reanuda).
+        evaluationPassId: old.evaluationPassId ?? null,
       }
       const fresh =
         kind === 'psych'
@@ -100,7 +104,8 @@ export default class EvaluationReviewsController {
   async confirmRole({ params, request, response }: HttpContext) {
     const kind = this.kindFrom(request)
     const { reason } = parseBody(request)
-    if (reason.length < MIN_REASON) return response.badRequest({ error: 'Escribe el motivo (mínimo 10 caracteres)' })
+    if (reason.length < MIN_REASON)
+      return response.badRequest({ error: 'Escribe el motivo (mínimo 10 caracteres)' })
 
     const Model = modelFor(kind)
     const test = await Model.find(Number(params.id))
@@ -113,7 +118,13 @@ export default class EvaluationReviewsController {
     const role = evaluatedRoleOf(kind, testRoleInput(kind, test))
     if (!role) return response.unprocessableEntity({ error: 'No es un examen Impulso' })
 
-    appendLog(test, { action: 'confirm_role', roleCode: role, reason, at: DateTime.now().toISO()!, actor: ACTOR })
+    appendLog(test, {
+      action: 'confirm_role',
+      roleCode: role,
+      reason,
+      at: DateTime.now().toISO()!,
+      actor: ACTOR,
+    })
     await test.save()
     return { ok: true }
   }
@@ -123,12 +134,14 @@ export default class EvaluationReviewsController {
     const kind = this.kindFrom(request)
     const { reason, roleCode } = parseBody(request)
     if (!roleCode) return response.badRequest({ error: 'roleCode válido es requerido' })
-    if (reason.length < MIN_REASON) return response.badRequest({ error: 'Escribe el motivo (mínimo 10 caracteres)' })
+    if (reason.length < MIN_REASON)
+      return response.badRequest({ error: 'Escribe el motivo (mínimo 10 caracteres)' })
 
     const Model = modelFor(kind)
     const test = await Model.find(Number(params.id))
     if (!test) return response.notFound({ error: 'Prueba no encontrada' })
-    if (!test.takenAt || !test.answersJson) return response.conflict({ error: 'La prueba no tiene respuestas' })
+    if (!test.takenAt || !test.answersJson)
+      return response.conflict({ error: 'La prueba no tiene respuestas' })
     const fp = fingerprintAnswers(test.answersJson)
     if (fp !== CURRENT_BANK_FINGERPRINT[kind][roleCode]) {
       return response.unprocessableEntity({
@@ -147,11 +160,14 @@ export default class EvaluationReviewsController {
       .whereRaw(
         "JSON_UNQUOTE(JSON_EXTRACT(ai_report_json, '$.status')) IN ('role_review_required', 'grading_failed')"
       )
-      .update({ ai_report_json: db.knexRawQuery("JSON_SET(ai_report_json, '$.status', 'regrading')") })
+      .update({
+        ai_report_json: db.knexRawQuery("JSON_SET(ai_report_json, '$.status', 'regrading')"),
+      })
     const affected = Array.isArray(claimed) ? Number(claimed[0]) : Number(claimed)
     if (!affected) {
       return response.conflict({
-        error: 'Sólo se califican aquí evaluaciones detenidas por revisión o por falla (o ya se está calificando).',
+        error:
+          'Sólo se califican aquí evaluaciones detenidas por revisión o por falla (o ya se está calificando).',
       })
     }
     const previousReport = test.aiReportJson ?? null

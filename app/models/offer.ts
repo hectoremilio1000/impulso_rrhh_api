@@ -18,6 +18,8 @@ export default class Offer extends BaseModel {
   @column() declare notes?: string | null
   @column.dateTime({ columnName: 'responded_at' }) declare respondedAt?: DateTime | null
   @column({ columnName: 'responded_ip' }) declare respondedIp?: string | null
+  @column({ columnName: 'restaurant_id' }) declare restaurantId?: number | null
+  @column({ columnName: 'created_by_user_id' }) declare createdByUserId?: number | null
 
   @column.dateTime({ columnName: 'created_at' }) declare createdAt: DateTime
   @column.dateTime({ columnName: 'updated_at' }) declare updatedAt: DateTime

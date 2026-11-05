@@ -16,6 +16,11 @@ export default class Interview extends BaseModel {
   @column({ columnName: 'meeting_link' }) declare meetingLink?: string | null
   @column() declare outcome: string // pending|showed|no_show|passed|failed
   @column() declare notes?: string | null
+  @column({ columnName: 'restaurant_id' }) declare restaurantId?: number | null
+  // Cita (scheduled_at) ≠ entrevista realizada (held_at).
+  @column.dateTime({ columnName: 'held_at' }) declare heldAt?: DateTime | null
+  @column({ columnName: 'interviewer_user_id' }) declare interviewerUserId?: number | null
+  @column({ columnName: 'recorded_by_user_id' }) declare recordedByUserId?: number | null
 
   @column.dateTime({ columnName: 'created_at' }) declare createdAt: DateTime
   @column.dateTime({ columnName: 'updated_at' }) declare updatedAt: DateTime
