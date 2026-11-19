@@ -81,7 +81,15 @@ function reglaPerspectiva(rol: string, perspectiva: Perspectiva) {
   el puesto de ${rol} haga algo que le toca a ella.
 - Cada elemento es una acción de quien ocupa el puesto de ${rol}, dentro de lo
   que le toca. Atender en persona al cliente o a la persona afectada ("me quedo
-  con el cliente", "lo acompaño a su mesa") SÍ cuenta cuando el elemento lo pide.`
+  con el cliente", "lo acompaño a su mesa") SÍ cuenta cuando el elemento lo pide.
+- Una oración con dos acciones demuestra dos elementos, cada uno con su parte:
+  en "pido ambulancia y me quedo con el cliente", "pido ambulancia" es una y
+  "me quedo con el cliente" es otra.
+- Si el elemento pide informar, explicar o comunicar algo (al cliente, a cocina
+  o al equipo), decirlo ES la acción ("su perrito puede entrar" cumple informar
+  si se admiten mascotas).
+- Pedir a alguien del equipo que avise o haga algo cumple un elemento que pide
+  que eso se haga o se avise, salvo que el elemento diga que lo haga él mismo.`
 }
 
 export function buildPromptPregunta(
@@ -248,7 +256,14 @@ preguntas cerradas, una por una (true o false):
       Sí es true cuando además dice cómo actúa ("solo siento a quienes tengan
       lugar", "pregunto a cada mesero si ya ubica sus mesas", "confirmo en el
       sistema que no queden cuentas abiertas").
-  "generica": ¿es una frase sin contenido concreto ("dejo todo listo", "lo
+${
+  perspectiva === 'puesto'
+    ? `      También es true si el elemento pide informar, explicar o avisar y la frase
+      lo dice ("pueden traer pastel sin cargo"), o si pide a alguien del equipo
+      que avise o lo haga, salvo que el elemento diga que lo haga él mismo.
+`
+    : ''
+}  "generica": ¿es una frase sin contenido concreto ("dejo todo listo", "lo
       reviso", "lo resuelvo", "lo dejo por escrito" sin decir qué)?
 ${
   perspectiva === 'responsable_turno'
@@ -265,7 +280,15 @@ ${
       gerente y espero", "que él nos indique")?
   "condicionada": ¿la acción queda condicionada a que otro decida ("pensaría
       en..., pero esperaría su decisión", "hasta que él nos diga")?
-
+${
+  perspectiva === 'puesto'
+    ? `      NO es condicionada: esperar el visto bueno de su jefe cuando el elemento o
+      el caso dicen que esa decisión no le toca ("sólo confirmo la mesa cuando
+      el capitán lo valide"), ni ofrecer algo sujeto a que el cliente acepte
+      ("los anoto si aceptan").
+`
+    : ''
+}
 Explica en "motivo", en una línea, la pregunta que decidió.
 
 Devuelve SOLO este JSON: { "elementos": [{ "id": "<id>", "hace": true | false, "generica": true | false, "solo_lo_suyo": true | false, "delega": true | false, "condicionada": true | false, "motivo": "<una línea>" }] }`

@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import { calificarNumerica, numerosDe } from '#services/practical_rubric_grader'
-import { gradeCompetencias, interpretarCompetencia } from '#services/competency_grader'
+import { claseConfirmada, consolidar, gradeCompetencias, interpretarCompetencia } from '#services/competency_grader'
 import {
   CATALOGO,
   CATALOG_CODES,
@@ -140,7 +140,7 @@ test.group('catálogo — lo que ve el candidato', () => {
         'practico-rubrica-v3.3',
         c
       )
-      assert.equal(psychGradingVersion(c, huellaCompetencias(CATALOGO[c])).grader, 'competencias-evidencia-v1', c)
+      assert.equal(psychGradingVersion(c, huellaCompetencias(CATALOGO[c])).grader, 'competencias-evidencia-v2', c)
     }
   })
 
@@ -232,8 +232,10 @@ test.group('catálogo — competencias por evidencia (sin modelo)', () => {
 
   test('sólo lo que haría → tope en suficiente y se marca criterio declarado', ({ assert }) => {
     const qs = delEje('empatia', 'Le ofrecería agua y una mesa en cuanto se libere.')
+    // Desde v2 lo que haría da nivel sólo si la pregunta pide lo que haría.
+    const hip = qs.find((x) => x.p.tipo === 'hipotetica')!
     const r = interpretarCompetencia('empatia', qs, {
-      evidencias: [{ q: qs[0].q, cita: 'Le ofrecería agua', clase: 'criterio', fuerza: 'fuerte', senal: 's' }],
+      evidencias: [{ q: hip.q, cita: 'Le ofrecería agua', clase: 'criterio', fuerza: 'fuerte', senal: 's' }],
     })
     assert.equal(r.tipoEvidencia, 'solo_criterio_declarado')
     assert.equal(r.nivel, 2)
@@ -379,5 +381,36 @@ test.group('catálogo — huella de la rúbrica (ronda 3)', () => {
     if (p.tipo === 'numerica') p.tolerancia = p.tolerancia + 1
     assert.notEqual(huellaRubrica(g), huellaRubrica(f))
     assert.equal(huellaPractico(g), huellaPractico(f))
+  })
+})
+
+test.group('competencias v2 — clase confirmada y regla de lo hipotético (sin modelo)', () => {
+  const exp = { texto: 'Cuéntame una vez que…', eje: 'integridad', tipo: 'experiencia', senalesPositivas: [], senalesAlerta: [] } as any
+  const hip = { ...exp, texto: '¿Qué harías si…?', tipo: 'hipotetica' }
+  const ev = (q: number, clase: any, fuerza: any = 'suficiente') => ({ q, cita: 'x', clase, fuerza, senal: '' })
+
+  test('un valor declarado sin acción es genérico; la acción en condicional es criterio; la hecha, relato', ({ assert }) => {
+    assert.equal(claseConfirmada({ accion_propia: false, ya_lo_hizo: false }, 'criterio'), 'generica')
+    assert.equal(claseConfirmada({ accion_propia: true, ya_lo_hizo: false }, 'relato'), 'criterio')
+    assert.equal(claseConfirmada({ accion_propia: true, ya_lo_hizo: true }, 'criterio'), 'relato')
+    // Sin respuesta del modelo se conserva la clase de la primera pasada.
+    assert.equal(claseConfirmada(undefined, 'relato'), 'relato')
+  })
+
+  test('contestar lo que haría a una pregunta de hechos → «Por verificar», no nivel', ({ assert }) => {
+    const r = consolidar([{ q: 1, p: exp }], [ev(1, 'criterio')])
+    assert.equal(r.tipoEvidencia, 'solo_criterio_declarado')
+    assert.isNull(r.nivel)
+    assert.match(r.faltaVerificar[0], /por verificar/)
+  })
+
+  test('lo que haría en una pregunta hipotética da nivel, con tope en suficiente', ({ assert }) => {
+    const r = consolidar([{ q: 1, p: hip }], [ev(1, 'criterio', 'fuerte')])
+    assert.equal(r.nivel, 2)
+  })
+
+  test('un relato manda sobre el criterio; genéricas no cuentan', ({ assert }) => {
+    assert.equal(consolidar([{ q: 1, p: exp }, { q: 2, p: hip }], [ev(1, 'relato', 'fuerte'), ev(2, 'criterio', 'debil')]).nivel, 3)
+    assert.isNull(consolidar([{ q: 1, p: exp }], [ev(1, 'generica', 'fuerte')]).nivel)
   })
 })
