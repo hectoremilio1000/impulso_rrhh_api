@@ -170,3 +170,28 @@ Supuestos que los exámenes usan de forma **provisional**. Nada aquí es políti
 - **K8 (descuento por faltante, LFT art. 110):** requiere revisión de un abogado laboral; hoy no entra al examen.
 - **Etapas 3–4 del diseño** (casos 4 y 5 presenciales, entrevista B2–B9, referencias y turno de prueba) no son parte del examen en línea.
 - **P10 (faltantes de los martes):** ¿«conteo conjunto y doble firma con seguimiento a cada cierre» cumple «mide si el faltante desaparece», o se exige indicador y comparación explícitos? (desacuerdo modelo/Codex).
+
+## Piloto de tres puestos — decisiones de Héctor (2026-11-19)
+
+Aplican a Hostess, Encargado de cocina y Gerente.
+
+1. **Reglas de la casa:** se redactan como «Para este ejercicio, supón que…».
+   Son supuestos, no políticas confirmadas de La Llorona; se califica sólo con
+   la información dada y se aceptan alternativas que cumplan las condiciones.
+   El conocimiento técnico de seguridad e higiene lleva referencia real
+   (NOM-251 para temperaturas), no una regla inventada.
+2. **Reporte del reclutador:** práctico con puntaje 0–100 orientativo, sin
+   corte validado, con desglose por tema y respuestas que justifican los
+   puntos; competencias con nivel, cita y tipo de evidencia («Por verificar»
+   sin evidencia suficiente); alertas visibles junto al puntaje con motivo y
+   cita; siguiente paso para entrevista; versión del examen. Sin calificación
+   global, sin CONTRATAR/DESCARTAR y sin colores de aprobación.
+3. **Indispensables:** decididas de antemano en la ficha con su motivo
+   (`motivoIndispensable`). En blanco, «no sé» o incorrecta → cero y
+   «Conocimiento indispensable pendiente de comprobar» con revisión humana.
+   Una acción peligrosa → «Respuesta crítica» con cita. Motivos distintos; no
+   se infiere falta de integridad por decir «no sé».
+4. **Presupuesto:** tope acumulado de US$24 con la llave de pruebas.
+
+Resuelto en el banco v2: P10 de Gerente (`mide` acepta el conteo conjunto con
+doble firma y seguimiento en cada cierre).
