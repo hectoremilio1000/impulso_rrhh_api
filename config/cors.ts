@@ -1,11 +1,23 @@
 // /config/cors.ts
 import { defineConfig } from '@adonisjs/cors'
+import env from '#start/env'
+
+// Orígenes extra por ambiente (CORS_ORIGENES_EXTRA, separados por coma). En
+// producción no se define y sólo vale la lista fija de abajo.
+export function origenesExtra(valor: string | undefined): string[] {
+  return (valor ?? '')
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, ''))
+    .filter((s) => /^https?:\/\/[^\s/]+$/.test(s))
+}
+const EXTRA = origenesExtra(env.get('CORS_ORIGENES_EXTRA'))
 
 export default defineConfig({
   enabled: true,
 
   origin: (origin) => {
     if (!origin) return true // curl/postman
+    if (EXTRA.includes(origin)) return true
 
     // Dominios del sitio público (con y sin www)
     if (origin === 'https://impulsorestaurantero.com') return true
