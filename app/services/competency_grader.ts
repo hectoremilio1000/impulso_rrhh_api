@@ -17,7 +17,6 @@
 //   · Curiosidad y optimismo cuentan para el nivel, pero no generan alertas.
 
 import { gradeExamJson, GPT_MODEL_ESCALADO } from '#services/openai'
-import { citaVerificable } from '#services/psych_axis_grader'
 import { fragmentoLiteral } from '#services/cita_literal'
 import { RUBRICAS } from '#services/psych_axis_rubric'
 import { EJES, type Eje, type ExamenPuesto, type PreguntaCompetencia } from '#services/exam_catalog/types'
@@ -137,8 +136,11 @@ con dinero o producto, humillar, poner en riesgo a alguien). Una respuesta
 vaga, corta o un "no sé" NUNCA es alerta.`
 }
 
+En "revisadas" pon el número de TODAS las preguntas que revisaste, tengan o no
+evidencia.
+
 Devuelve SOLO este JSON:
-{ "evidencias": [{ "q": 0, "cita": "", "clase": "relato", "fuerza": "suficiente", "senal": "" }], "alerta": { "presente": false } }`
+{ "revisadas": [0], "evidencias": [{ "q": 0, "cita": "", "clase": "relato", "fuerza": "suficiente", "senal": "" }], "alerta": { "presente": false } }`
 }
 
 export function buildPromptConfirmaAlerta(eje: Eje, pregunta: string, cita: string, respuesta: string, conducta: string) {
@@ -235,22 +237,34 @@ export function confirmacionValida(c: any): boolean {
   return !!c && typeof c.accion_propia === 'boolean' && typeof c.ya_lo_hizo === 'boolean'
 }
 
+type CitaAConfirmar = { i: number; q: number; pregunta: string; respuesta: string; cita: string }
+
+/** Respuestas del confirmador por índice; un índice inválido o repetido no se usa (pura). */
+export function leerConfirmaciones(v: any, indices: number[]): Map<number, any> {
+  const porN = new Map<number, any>()
+  const repetidos = new Set<number>()
+  for (const c of Array.isArray(v?.citas) ? v.citas : []) {
+    const n = c?.n
+    // Sólo enteros (o "3"): null, "", false o 1.5 no se atribuyen a ninguna cita.
+    const idx = typeof n === 'number' ? n : typeof n === 'string' && /^\d+$/.test(n) ? Number(n) : Number.NaN
+    if (!Number.isInteger(idx) || !indices.includes(idx)) continue
+    if (porN.has(idx)) repetidos.add(idx)
+    porN.set(idx, c)
+  }
+  // Dos respuestas para la misma cita: ambigua, ninguna cuenta.
+  for (const n of repetidos) porN.delete(n)
+  return porN
+}
+
 async function confirmarCitas(
   llm: Llm,
   eje: Eje,
-  citas: { i: number; q: number; pregunta: string; respuesta: string; cita: string }[],
+  citas: CitaAConfirmar[],
   model: string,
   onMeta: (m: any) => void
 ) {
-  const v = await llm(buildPromptConfirmaCitas(eje, citas), { model, maxTokens: 800, onMeta })
-  const porN = new Map<number, any>()
-  for (const c of Array.isArray(v?.citas) ? v.citas : []) {
-    const n = Number(c?.n)
-    // Índice desconocido o repetido: se ignora (no se adivina a qué cita va).
-    if (!Number.isInteger(n) || n < 0 || n >= citas.length || porN.has(n)) continue
-    porN.set(n, c)
-  }
-  return porN
+  const v = await llm(buildPromptConfirmaCitas(eje, citas), { model, maxTokens: 1500, onMeta })
+  return leerConfirmaciones(v, citas.map((c) => c.i))
 }
 
 /** Clase final de una cita según las preguntas cerradas (pura). */
@@ -276,11 +290,12 @@ export function interpretarCompetencia(
     const cita = String(e?.cita ?? '').trim()
     const fila = porQ.get(q)
     if (!fila || !cita) continue
-    if (!citaVerificable(cita, [{ qid: `q${q}`, pregunta: '', respuesta: fila.respuesta }])) {
+    // La cita debe tener tramo literal en la respuesta (con su negación).
+    const literal = fragmentoLiteral(cita, fila.respuesta)
+    if (literal === null) {
       noVerificadas.push(cita)
       continue
     }
-    const literal = fragmentoLiteral(cita, fila.respuesta) ?? cita
     const clase: ClaseEvidencia = ['relato', 'criterio'].includes(e?.clase) ? e.clase : 'generica'
     const fuerza: Fuerza = ['debil', 'suficiente', 'fuerte'].includes(e?.fuerza) ? e.fuerza : 'debil'
     evidencias.push({ q, cita: literal, clase, fuerza, senal: String(e?.senal ?? '').slice(0, 200) })
@@ -293,8 +308,8 @@ export function interpretarCompetencia(
     const q = Number(String(a.q ?? '').replace(/\D/g, ''))
     const fila = porQ.get(q)
     const cita = String(a.cita ?? '').trim()
-    if (fila && cita && citaVerificable(cita, [{ qid: `q${q}`, pregunta: '', respuesta: fila.respuesta }]))
-      alertaPropuesta = { q, cita, conducta: String(a.conducta ?? '').slice(0, 200) }
+    const literal = fila && cita ? fragmentoLiteral(cita, fila.respuesta) : null
+    if (literal) alertaPropuesta = { q, cita: literal, conducta: String(a.conducta ?? '').slice(0, 200) }
   }
   return {
     eje,
@@ -353,6 +368,12 @@ export async function gradeCompetencias(opts: {
         onMeta,
       })
       const { alertaPropuesta, ...r } = interpretarCompetencia(eje, conTexto, raw)
+      // Cobertura: una pregunta con respuesta que el modelo no dice haber
+      // revisado queda señalada (omisión ≠ ausencia de evidencia).
+      const revisadas = new Set(
+        (Array.isArray(raw?.revisadas) ? raw.revisadas : []).map((x: any) => Number(String(x).replace(/\D/g, '')))
+      )
+      const sinRevisar = conTexto.filter((x) => !revisadas.has(x.q)).map((x) => x.q)
       // Clase de cada cita por preguntas cerradas; el código decide el nivel.
       if (r.evidencias.length) {
         const citas = r.evidencias.map((e, i) => {
@@ -361,26 +382,33 @@ export async function gradeCompetencias(opts: {
         })
         // Una confirmación inválida se pide una vez más; lo que siga sin
         // confirmar no cuenta para el nivel y queda señalado (Codex, ronda 4).
-        let porN = await confirmarCitas(llm, eje, citas, model, onMeta)
-        if (citas.some((c) => !confirmacionValida(porN.get(c.i))))
-          porN = await confirmarCitas(llm, eje, citas, model, onMeta)
+        const porN = await confirmarCitas(llm, eje, citas, model, onMeta)
+        // Reintento sólo de las citas sin confirmación válida; las ya
+        // confirmadas se conservan tal cual (no se reemplaza el primer intento).
+        const faltan = citas.filter((c) => !confirmacionValida(porN.get(c.i)))
+        if (faltan.length) {
+          const otra = await confirmarCitas(llm, eje, faltan, model, onMeta)
+          for (const c of faltan) if (confirmacionValida(otra.get(c.i))) porN.set(c.i, otra.get(c.i))
+        }
         const sinConfirmar = citas.filter((c) => !confirmacionValida(porN.get(c.i))).map((c) => c.q)
         r.evidencias = r.evidencias.map((e, i) => {
           const c = porN.get(i)
-          return {
-            ...e,
-            claseModelo: e.clase,
-            clase: confirmacionValida(c) ? claseConfirmada(c, e.clase) : e.clase,
-            confirmada: confirmacionValida(c),
-          }
+          const ok = confirmacionValida(c)
+          const clase = ok ? claseConfirmada(c, e.clase) : e.clase
+          // Si la confirmación cambia la clase, la fuerza del primer juicio no
+          // se hereda completa: queda como mucho en «suficiente».
+          const fuerza: Fuerza = clase !== e.clase && e.fuerza === 'fuerte' ? 'suficiente' : e.fuerza
+          return { ...e, claseModelo: e.clase, clase, fuerza, confirmada: ok }
         })
         Object.assign(r, consolidar(conTexto, r.evidencias.filter((e) => e.confirmada)))
         if (sinConfirmar.length)
           r.faltaVerificar.push(
-            `Citas sin clasificar (P${[...new Set(sinConfirmar)].join(', P')}): revisarlas a mano; no cuentan para el nivel.`
+            `Citas sin clasificar (P${[...new Set(sinConfirmar)].join(', P')}): revisarlas a mano; no cuentan para el nivel, que queda provisional.`
           )
         r.score = r.nivel === null ? null : SCORE_POR_NIVEL[r.nivel]
       }
+      if (sinRevisar.length)
+        r.faltaVerificar.push(`Preguntas que el calificador no reportó revisadas: P${sinRevisar.join(', P')}. Leerlas a mano.`)
       const out: ResultadoCompetencia = { ...r, sinRespuesta, noSabe }
       if (alertaPropuesta) {
         const fila = conTexto.find((x) => x.q === alertaPropuesta.q)!
