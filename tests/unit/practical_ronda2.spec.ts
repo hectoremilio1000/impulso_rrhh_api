@@ -3,6 +3,7 @@ import {
   alertaDe,
   buildPromptConfirmaElementos,
   buildPromptConfirmaError,
+  buildPromptPregunta,
   decisionDe,
   elementoAdmiteEscalar,
   gradeConRubrica,
@@ -308,5 +309,33 @@ test.group('piloto 2026-11-19 — sin aprobado automático', () => {
     assert.include(rh.pendientes[0].motivo, 'capacidad')
     // «No sé» no es alerta de mala práctica.
     assert.isFalse(r.aiReport.alerta.requiereRevision)
+  })
+})
+
+test.group('perspectiva del puesto (2026-11-19)', () => {
+  const ESP = RUBRICA_SUBGERENTE_V3[7]
+  test('Subgerente (por omisión) conserva el criterio de responsable del turno, sin cambios', ({ assert }) => {
+    const a = buildPromptPregunta('Subgerente', ESP, P8, ESPERA)
+    assert.equal(a, buildPromptPregunta('Subgerente', ESP, P8, ESPERA, 'responsable_turno'))
+    assert.include(a, 'Cada elemento es una acción del RESPONSABLE DEL TURNO (sobre el equipo, la\n  caja o el salón).')
+    assert.include(a, '("limpio mis\n  mesas", "le llevo agua a mi cliente") NO cuenta.')
+    const c = buildPromptConfirmaElementos(P8, [{ id: 'x', texto: 'y', cita: ESPERA }], ESPERA)
+    assert.include(c, 'no como responsable del turno?')
+  })
+
+  test('catálogo: se juzga desde el puesto; atender en persona al afectado sí cuenta', ({ assert }) => {
+    const a = buildPromptPregunta('Gerente', ESP, P8, ESPERA, 'puesto')
+    assert.notInclude(a, 'RESPONSABLE DEL TURNO')
+    assert.include(a, 'quien ocupa el puesto de Gerente')
+    assert.include(a, '"me quedo\n  con el cliente"')
+    const c = buildPromptConfirmaElementos(P8, [{ id: 'x', texto: 'y', cita: ESPERA }], ESPERA, 'puesto', 'Hostess')
+    assert.include(c, 'Atender en persona al cliente o\n      a la persona afectada NO es "solo_lo_suyo". Puesto: Hostess.')
+  })
+
+  test('catálogo: consultar o avisar al jefe del puesto (capitán, dueño) no es «delega»', ({ assert }) => {
+    assert.isTrue(elementoAdmiteEscalar('Consulta al capitán antes de prometer mesa', 'puesto'))
+    assert.isTrue(elementoAdmiteEscalar('Lo comenta con el dueño con su cifra', 'puesto'))
+    // Subgerente sin cambios: sólo gerente, escalar, reportar o seguridad.
+    assert.isFalse(elementoAdmiteEscalar('Consulta al capitán antes de prometer mesa'))
   })
 })

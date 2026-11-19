@@ -182,9 +182,11 @@ export async function gradePracticalExam(
         // Piloto: sin aprobado/no aprobado; revisión humana por respuesta
         // crítica o por conocimiento indispensable sin comprobar.
         decisionPolicy: 'piloto-sin-decision-v1',
+        perspectiva: 'puesto-v1',
       },
       passThreshold: ficha.practico.umbralAprobado,
       sinDecisionAutomatica: true,
+      perspectiva: 'puesto',
     })
   }
   // Bancos anteriores al catálogo de los 5 puestos de piso/cocina/barra: sólo

@@ -60,11 +60,36 @@ export function respuestaDe(answers: any, q: number): string {
   return String(v.answer ?? v.value ?? v.text ?? v.respuesta ?? '')
 }
 
+/**
+ * Desde qué puesto se juzga una acción (2026-11-19). 'responsable_turno' es
+ * el criterio de Subgerente (sus prompts no cambian). 'puesto' es el del
+ * catálogo: cada puesto se juzga con lo que le toca; atender en persona al
+ * cliente o a la persona afectada no es «sólo lo suyo» (Gerente P8, Hostess).
+ */
+export type Perspectiva = 'responsable_turno' | 'puesto'
+
+function reglaPerspectiva(rol: string, perspectiva: Perspectiva) {
+  if (perspectiva === 'responsable_turno')
+    return `- Pasarle la decisión al gerente ("le aviso al gerente y espero") sólo cumple
+  un elemento que pide escalar o reportar. No cumple un elemento que pide que el
+  responsable del turno haga algo (cubrir, contar, resolver, ordenar).
+- Cada elemento es una acción del RESPONSABLE DEL TURNO (sobre el equipo, la
+  caja o el salón). Lo que haría sólo en su propia mesa o estación ("limpio mis
+  mesas", "le llevo agua a mi cliente") NO cuenta.`
+  return `- Pasarle la decisión a su jefe ("le aviso y espero") sólo cumple un elemento
+  que pide escalar o reportar. No cumple un elemento que pide que la persona en
+  el puesto de ${rol} haga algo que le toca a ella.
+- Cada elemento es una acción de quien ocupa el puesto de ${rol}, dentro de lo
+  que le toca. Atender en persona al cliente o a la persona afectada ("me quedo
+  con el cliente", "lo acompaño a su mesa") SÍ cuenta cuando el elemento lo pide.`
+}
+
 export function buildPromptPregunta(
   rol: string,
   p: PreguntaRubrica,
   pregunta: string,
-  respuesta: string
+  respuesta: string,
+  perspectiva: Perspectiva = 'responsable_turno'
 ) {
   const ess = p.esenciales.map((e) => `- ${e.id}: ${e.texto}`).join('\n')
   const err = p.erroresCriticos.length
@@ -113,12 +138,7 @@ Reglas:
   revisa no es revisarlo.
 - Lo que va entre paréntesis en un elemento son alternativas: basta una. No
   exijas todas las partes ni los ejemplos.
-- Pasarle la decisión al gerente ("le aviso al gerente y espero") sólo cumple
-  un elemento que pide escalar o reportar. No cumple un elemento que pide que el
-  responsable del turno haga algo (cubrir, contar, resolver, ordenar).
-- Cada elemento es una acción del RESPONSABLE DEL TURNO (sobre el equipo, la
-  caja o el salón). Lo que haría sólo en su propia mesa o estación ("limpio mis
-  mesas", "le llevo agua a mi cliente") NO cuenta.
+${reglaPerspectiva(rol, perspectiva)}
 - Frases de actitud o intención abstracta ("actitud positiva", "conexión con
   el equipo", "inspirar confianza", "transmitir que su opinión importa") NO son
   un procedimiento: no cuentan aunque mencionen al chef, al cliente o al piso.
@@ -171,20 +191,28 @@ NO es esa mala práctica.
 Devuelve SOLO este JSON: { "confirma": true | false, "motivo": "<una línea>" }`
 }
 
-/** El elemento pide escalar o reportar: avisar al gerente sí lo cumple. */
-export function elementoAdmiteEscalar(texto: string): boolean {
+/**
+ * El elemento pide escalar o reportar: avisar al jefe sí lo cumple. En el
+ * catálogo el jefe no siempre es el gerente (Hostess → capitán; Encargado de
+ * cocina → gerente; Gerente → dueño), y consultar o avisar es la acción pedida.
+ */
+export function elementoAdmiteEscalar(texto: string, perspectiva: Perspectiva = 'responsable_turno'): boolean {
+  if (perspectiva === 'puesto')
+    return /gerente|capit[aá]n|jefe|due[ñn]o|encargad|supervis|escal|report|consult|avis|seguridad|911|emergencia/i.test(texto)
   return /gerente|escal|report|seguridad/i.test(texto)
 }
 
 export function buildPromptConfirmaElementos(
   pregunta: string,
   elementos: { id: string; texto: string; cita: string }[],
-  respuesta: string
+  respuesta: string,
+  perspectiva: Perspectiva = 'responsable_turno',
+  rol = ''
 ) {
   const lista = elementos
     .map(
       (e) =>
-        `- id "${e.id}": ${e.texto}${elementoAdmiteEscalar(e.texto) ? ' [este elemento admite escalar o reportar: avisar al gerente aquí NO es "delega"]' : ''}\n  FRASE: "${e.cita.replace(/"/g, "'")}"`
+        `- id "${e.id}": ${e.texto}${elementoAdmiteEscalar(e.texto, perspectiva) ? (perspectiva === 'puesto' ? ' [este elemento admite escalar, consultar o reportar: avisar al jefe aquí NO es "delega"]' : ' [este elemento admite escalar o reportar: avisar al gerente aquí NO es "delega"]') : ''}\n  FRASE: "${e.cita.replace(/"/g, "'")}"`
     )
     .join('\n')
   return `Revisa si cada frase de una respuesta de examen hace de verdad lo que pide un elemento.
@@ -222,9 +250,16 @@ preguntas cerradas, una por una (true o false):
       sistema que no queden cuentas abiertas").
   "generica": ¿es una frase sin contenido concreto ("dejo todo listo", "lo
       reviso", "lo resuelvo", "lo dejo por escrito" sin decir qué)?
-  "solo_lo_suyo": ¿habla sólo de lo suyo como si fuera mesero o empleado de
+${
+  perspectiva === 'responsable_turno'
+    ? `  "solo_lo_suyo": ¿habla sólo de lo suyo como si fuera mesero o empleado de
       una estación (su mesa, su estación, su cliente, su propina o la propina
-      que le corresponde, su mandil), no como responsable del turno?
+      que le corresponde, su mandil), no como responsable del turno?`
+    : `  "solo_lo_suyo": el elemento pide actuar sobre el equipo, el turno o el
+      área, y la frase sólo habla de una tarea personal suya distinta (su
+      propia estación, su propina, su mandil)? Atender en persona al cliente o
+      a la persona afectada NO es "solo_lo_suyo". Puesto: ${rol}.`
+}
   "delega": ¿le deja a otra persona (gerente, caja, administración) hacer o
       decidir lo que el elemento pide hacer al responsable ("le aviso al
       gerente y espero", "que él nos indique")?
@@ -525,6 +560,8 @@ export async function gradeConRubrica(opts: {
   sinDecisionAutomatica?: boolean
   // Texto de las preguntas del banco del servidor (no el que mandó el cliente).
   preguntasBanco: string[]
+  /** Por omisión, el criterio de Subgerente (responsable del turno). */
+  perspectiva?: Perspectiva
   // Sólo pruebas: sustituye la llamada al modelo (sin red, sin costo).
   llm?: (
     prompt: string,
@@ -572,7 +609,7 @@ export async function gradeConRubrica(opts: {
       if (SOLO_NO_SE.test(respuesta))
         return { ...base, ...sinElementos, estado: 'no_sabe' as const }
       const pregunta = opts.preguntasBanco[p.q - 1] ?? ''
-      const raw = await llamar(buildPromptPregunta(opts.rol, p, pregunta, respuesta), {
+      const raw = await llamar(buildPromptPregunta(opts.rol, p, pregunta, respuesta, opts.perspectiva), {
         model,
       })
       // Un error crítico deja la pregunta en 0: se confirma aparte, con una
@@ -601,7 +638,7 @@ export async function gradeConRubrica(opts: {
         .map((e: any) => ({ id: String(e.id), cita: String(e.cita ?? ''), motivo: e.confirmacion }))
       const r0 = interpretarPregunta(p, respuesta, raw)
       if (!r0.elementos.length || r0.errores.length) return { ...base, ...r0, erroresDescartados }
-      const v = await llamar(buildPromptConfirmaElementos(pregunta, r0.elementos, respuesta), {
+      const v = await llamar(buildPromptConfirmaElementos(pregunta, r0.elementos, respuesta, opts.perspectiva, opts.rol), {
         model,
       })
       const conf = new Map<string, any>(
@@ -612,7 +649,7 @@ export async function gradeConRubrica(opts: {
         .map(({ e, c }) => ({
           id: e.id,
           cita: e.cita,
-          defecto: defectoDelElemento(c, elementoAdmiteEscalar(e.texto)),
+          defecto: defectoDelElemento(c, elementoAdmiteEscalar(e.texto, opts.perspectiva)),
           motivo: c?.motivo ?? null,
         }))
         .filter((x) => x.defecto !== null)
