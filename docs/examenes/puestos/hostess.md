@@ -150,7 +150,7 @@ correcta no cambia: la rúbrica ya aplicaba el supuesto dado.
 | Pregunta | Qué es | Referencia |
 |---|---|---|
 | P6 alergia a la nuez | Técnico (inocuidad). Se exige que la alergia llegue a cocina y barra y no prometer «sin nuez» sin confirmarlo con cocina (contacto cruzado). | FDA Food Code 2022, 2-103.11(N): el personal se capacita en alergias alimentarias, y la nuez de árbol está entre los alérgenos mayores (definición «Major food allergen», 1-201.10). |
-| P11 persona en evidente estado de ebriedad | Técnico y legal: no servir más alcohol a quien está en evidente estado de ebriedad. La facultad de negar la entrada sola es un supuesto. | Ley de Establecimientos Mercantiles de la Ciudad de México: prohíbe vender bebidas alcohólicas a personas en evidente estado de ebriedad (falta confirmar el artículo exacto); Manual La Llorona, «clientes en estado de ebriedad». |
+| P11 persona en evidente estado de ebriedad | Técnico y legal: no servir más alcohol a quien está en evidente estado de ebriedad. La facultad de negar la entrada sola es un supuesto. | Sin referencia legal confirmada: el 2026-11-19 no se encontró el artículo de la Ley de Establecimientos Mercantiles de la CDMX que lo establezca (art. 11 enumera prohibiciones; falta leerlo completo). La rúbrica no depende de la ley: se apoya en el manual de La Llorona («clientes en estado de ebriedad») y en el supuesto del ejercicio. Pendiente de revisión humana antes de citarla. |
 | P10 accesibilidad | Técnico (trato y seguridad): preguntar antes de ayudar, no adelantarse, avisar de desniveles. La mesa 4 y el baño en planta baja son supuestos. | Ley General para la Inclusión de las Personas con Discapacidad (no discriminación en servicios); Manual La Llorona, «Cómo acompañar y ubicar a un cliente». |
 | P2, P5, P7, P8, P12 | Supuestos internos (tiempos, umbral de 10, horarios, pastel, lista de espera, objetos olvidados). | Ninguna: son supuestos del ejercicio, en `pendientesOperador`. |
 
@@ -168,7 +168,7 @@ seguridad de personas o de riesgo grave, decididas de antemano:
 | 6 | No | Sí | Si la alergia no llega a cocina y barra o se minimiza, un cliente puede tener una reacción grave (anafilaxia). |
 | 7 | Sí | No | WhatsApp: comunicación; el riesgo de la cortesía ya es error crítico. |
 | 10 | No | Sí | Riesgo de caída en el escalón y de trato discriminatorio, prohibido por la ley. |
-| 11 | No | Sí | Dejar consumir a una persona en evidente estado de ebriedad, o sacarla con fuerza, pone en riesgo su salud y la de otros y expone al restaurante a una sanción. |
+| 11 | No | Sí | Dejar consumir a una persona en evidente estado de ebriedad, o sacarla con fuerza, pone en riesgo su salud y la de otros y puede exponer al restaurante a una sanción (referencia legal por confirmar). |
 
 P12 (objetos olvidados) queda como no indispensable: el riesgo es de
 integridad y ya tiene errores críticos (quedárselo, entregar sin comprobar).

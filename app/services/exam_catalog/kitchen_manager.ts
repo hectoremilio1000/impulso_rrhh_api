@@ -62,7 +62,7 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
     ],
     pendientesOperador: [
       'Si en La Llorona hay un chef por encima del encargado de cocina, o si el encargado reporta directo al gerente; y quién aprueba cambios de receta (banco v2: P1, P6 y P9 declaran como supuesto del ejercicio que el encargado reporta al gerente)',
-      'Estándar de temperaturas de la casa: el examen usa 4 °C o menos en refrigeración, -18 °C en congelación y 60 °C o más en caliente; la NOM-251 permite hasta 7 °C en refrigeración (banco v2: P1 y P9 lo declaran como supuesto del ejercicio; quien cite los 7 °C de la NOM no pierde puntos si aplica la regla del caso)',
+      'Estándar de temperaturas de la casa: el examen usa 4 °C o menos en refrigeración, -18 °C en congelación (práctica de la industria; la NOM-251 sólo pide mantener congelado) y 60 °C o más en caliente; la NOM-251 permite hasta 7 °C en refrigeración (banco v2: P1 y P9 lo declaran como supuesto del ejercicio; quien cite los 7 °C de la NOM no pierde puntos si aplica la regla del caso)',
       'Regla de tiempo fuera de refrigeración de la casa (el examen usa: más de 4 horas arriba de 4 °C se desecha; banco v2: declarada como supuesto en P1 y P9; no es de la NOM-251: se basa en el control por tiempo de 4 horas del FDA Food Code, 3-501.19)',
       'Los precios, gramajes y rendimientos de las preguntas 4 y 5 son ilustrativos, no datos de La Llorona',
       'Tope de compra o de gasto que el encargado puede autorizar sin el gerente (banco v2: P12 usa $3,000; falta confirmar la cifra y si el pedido semanal normal cuenta contra ese tope)',

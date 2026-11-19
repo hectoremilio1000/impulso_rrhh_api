@@ -239,12 +239,12 @@ Siguen siendo pendientes de operador (`facultades.pendientesOperador`).
 
 | Tema | Lo que usa el examen | Referencia | Cómo se califica |
 |---|---|---|---|
-| Refrigeración | Supuesto de esta cocina: 4 °C o menos | NOM-251-SSA1-2009 (prácticas de higiene para alimentos): refrigeración ≤ 7 °C, congelación ≤ −18 °C, caliente ≥ 60 °C | Se presenta como supuesto más estricto que la NOM. Aplicar los 7 °C de la NOM no resta: en P1 (9 °C) y P9 (12 °C) el equipo está fuera de rango con los dos límites. |
+| Refrigeración | Supuesto de esta cocina: 4 °C o menos | NOM-251-SSA1-2009 (prácticas de higiene para alimentos): refrigeración ≤ 7 °C y alimentos calientes ≥ 60 °C; para congelación la norma sólo pide que el equipo mantenga el producto congelado (los −18 °C son práctica de la industria, no de la NOM). Verificado 2026-11-19 en guías de verificación sanitaria (Salud NL, Edomex); falta cotejar contra el texto del DOF | Se presenta como supuesto más estricto que la NOM. Aplicar los 7 °C de la NOM no resta: en P1 (9 °C) y P9 (12 °C) el equipo está fuera de rango con los dos límites. |
 | 4 horas fuera de temperatura | Supuesto: lo que pasa más de 4 horas arriba de 4 °C se desecha | No es de la NOM-251. Viene del FDA Food Code (2022), 3-501.19 «Time as a Public Health Control»: alimento retirado del control de temperatura se usa o desecha a las 4 horas; allí el frío es 5 °C (41 °F) y el conteo empieza al sacarlo del control, no al pasar de 4 °C | Se presenta como supuesto del ejercicio. La rúbrica solo pide ver que, con 8 h y media sin registro, no se puede demostrar que estuvo 4 horas o menos fuera de rango. |
 | Fuga de gas (P8) | No hacer chispas; cerrar la llave solo si es seguro y sabe cómo; ventilar; alejar a las personas y pedir ayuda desde un lugar seguro; no reabrir sin revisión | Recomendaciones de protección civil para fugas de gas LP o natural (Coordinación Nacional de Protección Civil / CENAPRED): no accionar interruptores ni flamas, cerrar la llave de paso, abrir puertas y ventanas, salir y llamar al 911 desde fuera | Sin cambio: `personas` es `nucleo`; cerrar la llave ya estaba condicionado a que sea seguro. |
 | Alergia con síntomas de garganta (P10) | Posible anafilaxia: ayuda médica de inmediato | Guías de anafilaxia de la World Allergy Organization (WAO, 2020): reconocimiento temprano, llamar a emergencias y adrenalina intramuscular como primer tratamiento | Sin cambio en lo exigido (`emergencia` es `nucleo`). Ayudar a usar el autoinyector de la clienta, si lo trae, pasa a alternativa válida: no se exige, porque el encargado no tiene por qué saberlo ni tenerlo. |
 
-Congelación (−18 °C) y caliente (60 °C) no aparecen en ninguna pregunta.
+Congelación y caliente (60 °C) no aparecen en ninguna pregunta.
 
 **3. Indispensables y `motivoIndispensable`.** Criterio: seguridad de
 personas o riesgo grave, decidido de antemano.

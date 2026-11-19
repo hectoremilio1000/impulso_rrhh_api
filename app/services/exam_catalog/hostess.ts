@@ -507,7 +507,7 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
         tareaReal: 'Control de entrada y servicio responsable de alcohol (Manual: clientes en estado de ebriedad)',
         indispensable: true,
         motivoIndispensable:
-          'Si deja pasar a consumir a una persona en evidente estado de ebriedad, o la saca con fuerza, pone en riesgo su salud y la de otros (intoxicación, riñas, accidentes al salir) y expone al restaurante a una sanción.',
+          'Si deja pasar a consumir a una persona en evidente estado de ebriedad, o la saca con fuerza, pone en riesgo su salud y la de otros (intoxicación, riñas, accidentes al salir) y puede exponer al restaurante a una sanción.',
         esenciales: [
           {
             id: 'no_entra',
