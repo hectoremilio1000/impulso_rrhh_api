@@ -1,4 +1,5 @@
 import { decideEvaluationRole, type ExamKind, type ReviewLogEntry } from '#services/role_catalog'
+import { fichaVigente, preguntasVisibles } from '#services/exam_catalog/index'
 
 // Lo único que un link público de examen puede devolver. El link lo tiene
 // cualquiera que lo reciba; calificación, reporte de IA, respuestas y notas
@@ -35,9 +36,20 @@ export function publicExamView(kind: ExamKind, test: TestLike, candidate: Candid
     },
     desiredRole: candidate.desiredRole,
   })
+  // Banco que se muestra = banco con que se califica (ficha del catálogo).
+  // Sólo enunciados y tipo de captura: nunca rúbrica, claves ni señales.
+  // Puestos fuera del piloto: sin banco aquí; el front muestra su banco anterior.
+  const ficha = decision.status === 'ok' ? fichaVigente(decision.code) : null
   return {
     ok: true,
     alreadyTaken: !!test.takenAt,
+    bank: ficha
+      ? {
+          version: kind === 'psych' ? ficha.competencias.version : ficha.practico.version,
+          label: ficha.label,
+          questions: preguntasVisibles(ficha, kind),
+        }
+      : null,
     // El back decide qué examen se muestra; el front no reinterpreta el
     // puesto. Al candidato no se le dice el motivo de una revisión.
     roleCheck:

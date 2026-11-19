@@ -21,22 +21,36 @@ const CASOS: Array<[string, string | null]> = [
   ['Capitán', 'captain'],
   ['Capitan', 'captain'],
   ['Capitán de meseros', 'captain'],
+  // Fuera del piloto (2026-11-19) cada texto lleva al examen de antes.
+  ['Runner', null],
+  ['Auxiliar de servicio / Runner', null],
+  ['Hostess', 'hostess'],
+  ['Hostess / Anfitrión', 'hostess'],
+  ['Anfitriona', 'hostess'],
   ['Cocinero', 'cook'],
   ['Cocinera', 'cook'],
-  ['Encargado de cocina', 'cook'],
+  ['Subencargado de cocina', 'cook'],
+  ['Sous chef', 'chef_manager'],
+  ['Encargado de cocina', 'kitchen_manager'],
+  ['Jefe de cocina', 'kitchen_manager'],
   ['Barman', 'barman'],
   ['Bartender', 'barman'],
+  ['Cantinero', null],
   ['Jefe de barra', 'barman'],
+  ['Encargado de barra', 'barman'],
   ['Chef gerente', 'chef_manager'],
   ['Chef y Gerente', 'chef_manager'],
   ['chef_gerente', 'chef_manager'],
+  ['Chef ejecutivo', 'chef_manager'],
   ['Subgerente', 'assistant_manager'],
   ['Sub Gerente', 'assistant_manager'],
-  // Puestos sin examen propio: no se adivinan.
-  ['Gerente', null],
-  ['Gerente general', null],
-  ['Gerente operativo', null],
+  ['Gerente', 'general_manager'],
+  ['Gerente general', 'general_manager'],
+  ['Gerente operativo', 'general_manager'],
   ['Encargado', null],
+  ['Garrotero', null],
+  ['Ayudante de cocina', 'cook'],
+  ['Jefa de cocina', 'kitchen_manager'],
   ['', null],
 ]
 
@@ -56,7 +70,8 @@ test.group('roleCodeFromTestName', () => {
   })
 
   test('código desconocido o formato libre → null', ({ assert }) => {
-    assert.isNull(roleCodeFromTestName('PSYCH_GENERAL_MANAGER_V1'))
+    assert.equal(roleCodeFromTestName('PSYCH_GENERAL_MANAGER_V1'), 'general_manager')
+    assert.isNull(roleCodeFromTestName('PSYCH_DIRECTOR_V1'))
     assert.isNull(roleCodeFromTestName('Examen de prueba'))
     assert.isNull(roleCodeFromTestName(null))
   })
@@ -76,13 +91,22 @@ test.group('decideEvaluationRole — puesto fijado al asignar', () => {
     assert.deepEqual(decide('PSYCH_WAITER_V1', 'Capitán', { roleCode: 'captain' }), { status: 'ok', code: 'captain' })
   })
 
-  test('alias "Sub Gerente" y "Jefe de barra" con su prueba → ok', ({ assert }) => {
+  test('alias "Sub Gerente" y "Jefe de cocina" con su prueba → ok', ({ assert }) => {
     assert.equal(decide('PSYCH_ASSISTANT_MANAGER_V1', 'Sub Gerente').status, 'ok')
-    assert.equal(decide('PSYCH_BARMAN_V1', 'Jefe de barra').status, 'ok')
+    assert.equal(decide('PSYCH_KITCHEN_MANAGER_V1', 'Jefe de cocina').status, 'ok')
+  })
+
+  test('puesto fuera del piloto y sin banco anterior → revisión, sin examen', ({ assert }) => {
+    // Una prueba de Runner o Encargado de barra (sólo en bases de prueba) no
+    // se presenta ni se califica: esos puestos no tienen examen vigente.
+    assert.equal(reason(decide('PSYCH_RUNNER_V1', 'Runner')), 'unknown_desired_role')
+    assert.equal(reason(decide('PSYCH_BAR_MANAGER_V1', 'Jefe de barra')), 'unknown_desired_role')
   })
 
   test('histórico de Gerente con prueba de Mesero → revisión, nunca Mesero', ({ assert }) => {
-    assert.equal(reason(decide('PSYCH_WAITER_V1', 'Gerente')), 'unknown_desired_role')
+    // Desde el catálogo Gerente tiene examen propio: con prueba de Mesero es
+    // otro puesto (revisión), nunca se califica como Mesero.
+    assert.equal(reason(decide('PSYCH_WAITER_V1', 'Gerente')), 'role_mismatch')
   })
 
   test('alias con prueba de otro puesto → revisión', ({ assert }) => {
@@ -104,7 +128,7 @@ test.group('decideEvaluationRole — puesto fijado al asignar', () => {
 
   test('la confirmación de otro puesto no sirve', ({ assert }) => {
     const log = [{ action: 'confirm_role', roleCode: 'waiter', reason: 'x', at: '', actor: 'a' }]
-    assert.equal(reason(decide('PSYCH_CAPTAIN_V1', 'Gerente', { reviewLog: log })), 'unknown_desired_role')
+    assert.equal(reason(decide('PSYCH_CAPTAIN_V1', 'Gerente', { reviewLog: log })), 'role_mismatch')
   })
 
   test('el front mostró un examen distinto al asignado → revisión', ({ assert }) => {
@@ -159,7 +183,8 @@ test.group('toRoleCode — código del admin o texto libre', () => {
   })
   test('acepta texto libre y rechaza lo desconocido', ({ assert }) => {
     assert.equal(toRoleCode('Mesera'), 'waiter')
-    assert.isNull(toRoleCode('general_manager'))
+    assert.equal(toRoleCode('general_manager'), 'general_manager')
+    assert.isNull(toRoleCode('director_general'))
     assert.isNull(toRoleCode(42))
   })
 })

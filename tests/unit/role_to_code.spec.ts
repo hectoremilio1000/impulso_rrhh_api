@@ -47,12 +47,7 @@ test.group('roleToCode mapper público (public_apply_full_controller)', () => {
     assert.equal(roleToCode('CHEF'), 'chef_manager')
   })
 
-  test('Sous chef (variante razonable, hoy capturada por includes) → chef_manager', ({
-    assert,
-  }) => {
-    // Si en el futuro sous chef debe mapear a un roleCode distinto,
-    // agregar `if (v.includes('sous')) return 'sous_chef'` ANTES del
-    // check de chef.
+  test('Sous chef → chef_manager (Subencargado no está en el piloto: examen de antes)', ({ assert }) => {
     assert.equal(roleToCode('Sous chef'), 'chef_manager')
   })
 

@@ -4,8 +4,8 @@ import { DateTime } from 'luxon'
 import PsychTest from '#models/psych_test'
 import PracticalTest from '#models/practical_test'
 import type Candidate from '#models/candidate'
-import { gradePsychExam, PSYCH_GRADING_VERSION } from '#services/psych_exam_grader'
-import { gradePracticalExam, PRACTICAL_GRADING_VERSION } from '#services/practical_grader'
+import { gradePsychExam, psychGradingVersion } from '#services/psych_exam_grader'
+import { gradePracticalExam, practicalGradingVersion } from '#services/practical_grader'
 import { fingerprintAnswers } from '#services/bank_fingerprint'
 import {
   CURRENT_BANK_FINGERPRINT,
@@ -103,11 +103,21 @@ export async function gradeAndSave(input: {
   try {
     const graded =
       kind === 'psych'
-        ? await gradePsychExam(ROLE_LABEL_ES[roleCode], answers, candidate.id)
+        ? await gradePsychExam(ROLE_LABEL_ES[roleCode], answers, candidate.id, roleCode)
         : await gradePracticalExam(roleCode, answers)
 
+    // Sin llave del modelo no hubo calificación: queda como falla para poder
+    // calificarla después desde el admin (antes quedaba como nota y la prueba
+    // se quedaba "pendiente" sin salida).
+    const sinModelo = graded.aiReport?.note === 'OPENAI_API_KEY no configurada'
     test.aiReportJson = {
       ...graded.aiReport,
+      ...(sinModelo
+        ? {
+            status: 'grading_failed',
+            note: 'Respuestas guardadas; no había llave del modelo y puede calificarse después desde el admin.',
+          }
+        : {}),
       evaluationContext: {
         roleCode,
         roleLabel: ROLE_LABEL_ES[roleCode],
@@ -115,7 +125,10 @@ export async function gradeAndSave(input: {
         bankVersion: bankVersionFromTestName(test.testName),
         bankFingerprint: test.bankFingerprint ?? null,
         bankIsCurrent: test.bankFingerprint === CURRENT_BANK_FINGERPRINT[kind][roleCode],
-        grading: kind === 'psych' ? PSYCH_GRADING_VERSION : PRACTICAL_GRADING_VERSION,
+        grading:
+          kind === 'psych'
+            ? psychGradingVersion(roleCode, test.bankFingerprint ?? null)
+            : practicalGradingVersion(roleCode, test.bankFingerprint ?? null),
         gradedAt: DateTime.now().toISO(),
         ...context,
       },

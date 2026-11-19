@@ -53,7 +53,7 @@ test.group('normalizePsychRole — variantes reales de producción', () => {
     assert.equal(normalizePsychRole('Bartender '), 'Barman')
   })
 
-  test('"Jefe de barra" (2) → "Barman"', ({ assert }) => {
+  test('"Jefe de barra" (2) → "Barman" (Encargado de barra no está en el piloto)', ({ assert }) => {
     assert.equal(normalizePsychRole('Jefe de barra'), 'Barman')
   })
 
@@ -61,8 +61,8 @@ test.group('normalizePsychRole — variantes reales de producción', () => {
     assert.equal(normalizePsychRole('Cocinera '), 'Cocinero')
   })
 
-  test('"Encargado de cocina " (1) → "Cocinero"', ({ assert }) => {
-    assert.equal(normalizePsychRole('Encargado de cocina '), 'Cocinero')
+  test('"Encargado de cocina " (1) → "Encargado de cocina" (catálogo 2026-11-16)', ({ assert }) => {
+    assert.equal(normalizePsychRole('Encargado de cocina '), 'Encargado de cocina')
   })
 })
 
