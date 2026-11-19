@@ -18,15 +18,26 @@ puestos del catálogo (Runner, Encargado de barra, Subencargado de cocina y
 las versiones nuevas de los seis anteriores) quedan en el código sin
 publicarse.
 
+## Ambientes
+
+Estos repos no tienen DEV: no hay rama `dev` (sólo `devJampier`, de Jampier),
+Railway tiene sólo `production` y los previews de Vercel usan el mismo API que
+producción (y sin token del admin). `main` no tiene protección; el único check
+es GitGuardian (y Vercel en el front).
+
 ## Orden de publicación
 
-1. **Antes:** respaldo de la base de producción (MariaDB en BanaHosting) y
-   anotar el despliegue vigente: API `a82fa11` (Railway,
-   `microservicios_api_impulso / production`) y front `ba86cef` (Vercel).
-2. **Migración de #15** en producción, desde un worktree en el commit que se
-   va a publicar: `node ace migration:run --force`. La salida debe decir
-   `migrated`; sin `--force` responde «no» en silencio. Las columnas aceptan
-   vacío, así que el código actual sigue funcionando con ellas.
+1. **Antes:** respaldo de `psych_tests` y `practical_tests` de producción
+   (MariaDB 11.4.13 en BanaHosting, base `toizbseh_impulso_homepage`) y anotar
+   el despliegue vigente: API `a82fa11` (Railway `microservicios_api_impulso /
+   production`, despliegue `a858c56f-6a10-4ad6-ad6e-dc4caa8759ef`, dominio
+   `impulsorrhhapi-production-6c01.up.railway.app`) y front `ba86cef` (Vercel
+   `impulso-admin-front-page`, alias `impulso-admin-front-page.vercel.app`).
+2. **Migración de #15:** comprobado el 2026-11-19 (solo lectura) que
+   `1792787972042_add_review_columns_to_tests` **ya corrió en producción**
+   (batch 7) y las columnas existen. No hay migración pendiente; el piloto no
+   trae migraciones. Históricos al 2026-11-19: 816 psicométricos y 815
+   prácticos, que no se recalifican.
 3. **API:** mergear #15 a `main` y después la PR del piloto (retargeteada a
    `main`). Railway despliega `main`.
 4. **Front:** mergear #31 y después la PR del front del piloto. Vercel despliega `main`.
