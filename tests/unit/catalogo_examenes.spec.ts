@@ -137,10 +137,10 @@ test.group('catálogo — lo que ve el candidato', () => {
     for (const c of PUESTOS_PILOTO) {
       assert.equal(
         practicalGradingVersion(c, huellaPractico(CATALOGO[c])).grader,
-        'practico-rubrica-v3.3',
+        'practico-rubrica-v3.4',
         c
       )
-      assert.equal(psychGradingVersion(c, huellaCompetencias(CATALOGO[c])).grader, 'competencias-evidencia-v2', c)
+      assert.equal(psychGradingVersion(c, huellaCompetencias(CATALOGO[c])).grader, 'competencias-evidencia-v2.1', c)
     }
   })
 

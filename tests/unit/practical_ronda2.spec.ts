@@ -342,13 +342,13 @@ test.group('perspectiva del puesto (2026-11-19)', () => {
   test('catálogo: oración con dos acciones, informar es hacer, pedir al equipo y esperas legítimas', ({ assert }) => {
     const a = buildPromptPregunta('Gerente', ESP, P8, ESPERA, 'puesto')
     assert.include(a, 'Una oración con dos acciones demuestra dos elementos')
-    assert.include(a, 'decirlo ES la acción')
+    assert.include(a, 'cuenta cuando la\n  respuesta dice ese contenido a su destinatario')
     const c = buildPromptConfirmaElementos(P8, [{ id: 'x', texto: 'y', cita: ESPERA }], ESPERA, 'puesto', 'Hostess')
     assert.include(c, 'NO es condicionada: esperar el visto bueno de su jefe')
     assert.include(c, '("los anoto si aceptan")')
     // Nada de esto entra en los prompts de Subgerente.
     const sub = buildPromptConfirmaElementos(P8, [{ id: 'x', texto: 'y', cita: ESPERA }], ESPERA)
     assert.notInclude(sub, 'NO es condicionada')
-    assert.notInclude(buildPromptPregunta('Subgerente', ESP, P8, ESPERA), 'decirlo ES la acción')
+    assert.notInclude(buildPromptPregunta('Subgerente', ESP, P8, ESPERA), 'a su destinatario')
   })
 })

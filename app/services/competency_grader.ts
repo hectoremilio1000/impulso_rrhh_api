@@ -18,13 +18,16 @@
 
 import { gradeExamJson, GPT_MODEL_ESCALADO } from '#services/openai'
 import { citaVerificable } from '#services/psych_axis_grader'
+import { fragmentoLiteral } from '#services/cita_literal'
 import { RUBRICAS } from '#services/psych_axis_rubric'
 import { EJES, type Eje, type ExamenPuesto, type PreguntaCompetencia } from '#services/exam_catalog/types'
 
 export const COMPETENCY_GRADING_VERSION = {
   // v2 (2026-11-19): clase de cada cita por preguntas cerradas; lo que haría
   // sólo da nivel si la pregunta pedía lo que haría; sin puntaje global.
-  grader: 'competencias-evidencia-v2',
+  // v2.1: todas las preguntas del eje, respuestas mixtas divididas, citas
+  // literales y estado explícito de lo que no se pudo confirmar.
+  grader: 'competencias-evidencia-v2.1',
   agregacion: 'por-eje-sin-global-v1',
   model: process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO,
 } as const
@@ -33,7 +36,16 @@ export type ClaseEvidencia = 'relato' | 'criterio' | 'generica'
 export type Fuerza = 'debil' | 'suficiente' | 'fuerte'
 export type TipoEvidenciaEje = 'conducta_relatada' | 'solo_criterio_declarado' | 'sin_evidencia'
 
-export type Evidencia = { q: number; cita: string; clase: ClaseEvidencia; fuerza: Fuerza; senal: string; claseModelo?: ClaseEvidencia }
+export type Evidencia = {
+  q: number
+  cita: string
+  clase: ClaseEvidencia
+  fuerza: Fuerza
+  senal: string
+  claseModelo?: ClaseEvidencia
+  /** false si la clase no se pudo confirmar con las preguntas cerradas. */
+  confirmada?: boolean
+}
 
 export type ResultadoCompetencia = {
   eje: Eje
@@ -98,7 +110,10 @@ ${anclas(eje)}
 PREGUNTAS Y RESPUESTAS:
 ${bloque}
 
-Extrae hasta 4 evidencias. Para cada una:
+Revisa TODAS las preguntas, una por una, y extrae su evidencia (0, 1 o 2 por
+pregunta; no hay límite total). Si una respuesta mezcla algo que hizo con lo
+que haría ("lo detecté al revisar el corte. Avisaría…"), extrae dos citas:
+una con lo que hizo (relato) y otra con lo que haría (criterio). Para cada una:
   "q": número de la pregunta de donde sale;
   "cita": frase COPIADA tal cual de esa respuesta (se verifica; si la inventas,
           no cuenta);
@@ -156,7 +171,7 @@ export function consolidar(
   const tipoDe = new Map(preguntas.map((x) => [x.q, x.p.tipo]))
   const relatos = evidencias.filter((e) => e.clase === 'relato')
   const criterios = evidencias.filter((e) => e.clase === 'criterio')
-  const criteriosHipoteticos = criterios.filter((e) => tipoDe.get(e.q) !== 'experiencia')
+  const criteriosHipoteticos = criterios.filter((e) => tipoDe.get(e.q) === 'hipotetica')
   const media = (xs: Evidencia[]) => xs.reduce((a, e) => a + PUNTOS[e.fuerza], 0) / xs.length
   let nivel: 1 | 2 | 3 | null = null
   let tipoEvidencia: TipoEvidenciaEje = 'sin_evidencia'
@@ -216,6 +231,28 @@ Para cada frase, leída dentro de su respuesta completa, contesta true o false:
 Devuelve SOLO: { "citas": [{ "n": 0, "accion_propia": true, "ya_lo_hizo": false }] }`
 }
 
+export function confirmacionValida(c: any): boolean {
+  return !!c && typeof c.accion_propia === 'boolean' && typeof c.ya_lo_hizo === 'boolean'
+}
+
+async function confirmarCitas(
+  llm: Llm,
+  eje: Eje,
+  citas: { i: number; q: number; pregunta: string; respuesta: string; cita: string }[],
+  model: string,
+  onMeta: (m: any) => void
+) {
+  const v = await llm(buildPromptConfirmaCitas(eje, citas), { model, maxTokens: 800, onMeta })
+  const porN = new Map<number, any>()
+  for (const c of Array.isArray(v?.citas) ? v.citas : []) {
+    const n = Number(c?.n)
+    // Índice desconocido o repetido: se ignora (no se adivina a qué cita va).
+    if (!Number.isInteger(n) || n < 0 || n >= citas.length || porN.has(n)) continue
+    porN.set(n, c)
+  }
+  return porN
+}
+
 /** Clase final de una cita según las preguntas cerradas (pura). */
 export function claseConfirmada(c: { accion_propia?: unknown; ya_lo_hizo?: unknown } | undefined, actual: ClaseEvidencia): ClaseEvidencia {
   if (!c || typeof c.accion_propia !== 'boolean') return actual
@@ -243,9 +280,10 @@ export function interpretarCompetencia(
       noVerificadas.push(cita)
       continue
     }
+    const literal = fragmentoLiteral(cita, fila.respuesta) ?? cita
     const clase: ClaseEvidencia = ['relato', 'criterio'].includes(e?.clase) ? e.clase : 'generica'
     const fuerza: Fuerza = ['debil', 'suficiente', 'fuerte'].includes(e?.fuerza) ? e.fuerza : 'debil'
-    evidencias.push({ q, cita, clase, fuerza, senal: String(e?.senal ?? '').slice(0, 200) })
+    evidencias.push({ q, cita: literal, clase, fuerza, senal: String(e?.senal ?? '').slice(0, 200) })
   }
   const { nivel, tipoEvidencia, faltaVerificar } = consolidar(preguntas, evidencias)
 
@@ -311,7 +349,7 @@ export async function gradeCompetencias(opts: {
       }
       const raw = await llm(buildPromptCompetencia(opts.ficha.label, eje, conTexto), {
         model,
-        maxTokens: 1500,
+        maxTokens: 2500,
         onMeta,
       })
       const { alertaPropuesta, ...r } = interpretarCompetencia(eje, conTexto, raw)
@@ -321,12 +359,26 @@ export async function gradeCompetencias(opts: {
           const fila = conTexto.find((x) => x.q === e.q)!
           return { i, q: e.q, pregunta: fila.p.texto, respuesta: fila.respuesta, cita: e.cita }
         })
-        const v = await llm(buildPromptConfirmaCitas(eje, citas), { model, maxTokens: 800, onMeta })
-        const porN = new Map<number, any>(
-          (Array.isArray(v?.citas) ? v.citas : []).map((c: any) => [Number(c?.n), c])
-        )
-        r.evidencias = r.evidencias.map((e, i) => ({ ...e, claseModelo: e.clase, clase: claseConfirmada(porN.get(i), e.clase) }))
-        Object.assign(r, consolidar(conTexto, r.evidencias))
+        // Una confirmación inválida se pide una vez más; lo que siga sin
+        // confirmar no cuenta para el nivel y queda señalado (Codex, ronda 4).
+        let porN = await confirmarCitas(llm, eje, citas, model, onMeta)
+        if (citas.some((c) => !confirmacionValida(porN.get(c.i))))
+          porN = await confirmarCitas(llm, eje, citas, model, onMeta)
+        const sinConfirmar = citas.filter((c) => !confirmacionValida(porN.get(c.i))).map((c) => c.q)
+        r.evidencias = r.evidencias.map((e, i) => {
+          const c = porN.get(i)
+          return {
+            ...e,
+            claseModelo: e.clase,
+            clase: confirmacionValida(c) ? claseConfirmada(c, e.clase) : e.clase,
+            confirmada: confirmacionValida(c),
+          }
+        })
+        Object.assign(r, consolidar(conTexto, r.evidencias.filter((e) => e.confirmada)))
+        if (sinConfirmar.length)
+          r.faltaVerificar.push(
+            `Citas sin clasificar (P${[...new Set(sinConfirmar)].join(', P')}): revisarlas a mano; no cuentan para el nivel.`
+          )
         r.score = r.nivel === null ? null : SCORE_POR_NIVEL[r.nivel]
       }
       const out: ResultadoCompetencia = { ...r, sinRespuesta, noSabe }
