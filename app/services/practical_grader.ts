@@ -1,13 +1,61 @@
-import { gradeExamJson } from '#services/openai'
+import { gradeExamJson, GPT_MODEL_ESCALADO } from '#services/openai'
+import { gradeConRubrica } from '#services/practical_rubric_grader'
+import { RUBRICA_SUBGERENTE } from '#services/practical_rubrics/assistant_manager'
+import { RUBRICA_SUBGERENTE_V2 } from '#services/practical_rubrics/assistant_manager_v2'
+import { RUBRICA_SUBGERENTE_V3 } from '#services/practical_rubrics/assistant_manager_v3'
+import { bancoPorHuella } from '#services/practical_banks/assistant_manager'
+import { fingerprintAnswers } from '#services/bank_fingerprint'
+import {
+  enPiloto,
+  enunciadosPractico,
+  fichaPorHuella,
+  huellaRubrica,
+  preguntasAbiertas,
+  preguntasNumericas,
+} from '#services/exam_catalog/index'
 
 // Calificación del examen práctico. Movida desde
 // public_practical_tests_controller para reutilizarla al calificar tras una
-// revisión humana. Sigue siendo la rúbrica GENÉRICA de servicio de piso para
-// todos los puestos (pendiente: práctico por puesto).
+// revisión humana. Subgerente usa su rúbrica del puesto (2026-10-27); los
+// demás puestos siguen con la rúbrica GENÉRICA de servicio de piso.
 export const PRACTICAL_GRADING_VERSION = {
   grader: 'practico-generico-piso-v1',
   passThreshold: 82,
 } as const
+
+export const PRACTICAL_GRADING_VERSION_SUBGERENTE = {
+  grader: 'practico-rubrica-v3.3',
+  rubric: 'rubrica_subgerente_v1.1 (banco v1) · v2 (banco v2) · v3 (banco v3)',
+  model: process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO,
+  passThreshold: 82,
+} as const
+
+// Rúbrica según el banco con que se contestó: una respuesta a la v1 nunca se
+// califica como respuesta a la v2.
+const RUBRICA_POR_BANCO = {
+  banco_subgerente_v1: { rubrica: RUBRICA_SUBGERENTE, version: 'rubrica_subgerente_v1.1' },
+  banco_subgerente_v2: { rubrica: RUBRICA_SUBGERENTE_V2, version: 'rubrica_subgerente_v2' },
+  banco_subgerente_v3: { rubrica: RUBRICA_SUBGERENTE_V3, version: 'rubrica_subgerente_v3' },
+} as const
+
+/** Práctico por rúbrica del puesto (catálogo 2026-11-16): todos los puestos. */
+export const PRACTICAL_GRADING_VERSION_CATALOGO = {
+  grader: PRACTICAL_GRADING_VERSION_SUBGERENTE.grader,
+  model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
+} as const
+
+/** Versión con la que se califica el práctico de cada puesto. */
+export function practicalGradingVersion(roleCode: string, huella?: string | null) {
+  if (roleCode === 'assistant_manager' && enPiloto(roleCode)) return PRACTICAL_GRADING_VERSION_SUBGERENTE
+  const ficha = huella === undefined ? null : fichaPorHuella('practical', roleCode, huella)
+  return ficha
+    ? {
+        ...PRACTICAL_GRADING_VERSION_CATALOGO,
+        rubric: ficha.practico.version,
+        passThreshold: ficha.practico.umbralAprobado,
+      }
+    : PRACTICAL_GRADING_VERSION
+}
 
 export type PracticalGradeResult = {
   aiReport: any
@@ -15,7 +63,8 @@ export type PracticalGradeResult = {
   passed: boolean | null
 }
 
-export async function gradePracticalExam(
+/** Rúbrica genérica de piso (la anterior); se conserva para los demás puestos. */
+export async function gradePracticalGenerico(
   roleCode: string,
   answers: unknown
 ): Promise<PracticalGradeResult> {
@@ -74,4 +123,81 @@ ${JSON.stringify(answers)}
   const scoreNum = Number(aiReport?.score ?? Number.NaN)
   if (Number.isNaN(scoreNum)) return { aiReport, score: null, passed: null }
   return { aiReport, score: scoreNum, passed: scoreNum >= PRACTICAL_GRADING_VERSION.passThreshold }
+}
+
+export async function gradePracticalExam(
+  roleCode: string,
+  answers: unknown
+): Promise<PracticalGradeResult> {
+  if (!process.env.OPENAI_API_KEY) {
+    return { aiReport: { note: 'OPENAI_API_KEY no configurada' }, score: null, passed: null }
+  }
+  // Rúbrica por banco de Subgerente: sólo cuando Subgerente entre al piloto;
+  // mientras tanto su práctico vigente (v1) se califica como antes.
+  if (roleCode === 'assistant_manager' && enPiloto(roleCode)) {
+    const banco = bancoPorHuella(fingerprintAnswers(answers))
+    if (!banco) {
+      return {
+        aiReport: {
+          status: 'banco_no_reconocido',
+          note: 'Las preguntas no son de un banco conocido de Subgerente; no se califica.',
+        },
+        score: null,
+        passed: null,
+      }
+    }
+    const r = RUBRICA_POR_BANCO[banco.version]
+    return gradeConRubrica({
+      rol: 'Subgerente',
+      rubrica: r.rubrica,
+      answers,
+      preguntasBanco: banco.preguntas,
+      version: {
+        ...PRACTICAL_GRADING_VERSION_SUBGERENTE,
+        bank: banco.version,
+        bankFingerprint: banco.huella,
+        rubric: r.version,
+      },
+      passThreshold: PRACTICAL_GRADING_VERSION_SUBGERENTE.passThreshold,
+    })
+  }
+  // Puestos del catálogo: rúbrica de la ficha cuyo banco se contestó.
+  const huella = fingerprintAnswers(answers)
+  const ficha = fichaPorHuella('practical', roleCode, huella)
+  if (ficha) {
+    return gradeConRubrica({
+      rol: ficha.label,
+      rubrica: preguntasAbiertas(ficha),
+      numericas: preguntasNumericas(ficha),
+      dimensiones: ficha.practico.dimensiones,
+      answers,
+      preguntasBanco: enunciadosPractico(ficha),
+      version: {
+        ...PRACTICAL_GRADING_VERSION_CATALOGO,
+        rubric: ficha.practico.version,
+        bank: ficha.practico.version,
+        bankFingerprint: huella,
+        rubricHash: huellaRubrica(ficha),
+        passThreshold: ficha.practico.umbralAprobado,
+        // Piloto: sin aprobado/no aprobado; revisión humana por respuesta
+        // crítica o por conocimiento indispensable sin comprobar.
+        decisionPolicy: 'piloto-sin-decision-v1',
+      },
+      passThreshold: ficha.practico.umbralAprobado,
+      sinDecisionAutomatica: true,
+    })
+  }
+  // Bancos anteriores al catálogo de los 5 puestos de piso/cocina/barra: sólo
+  // se conservan para no romper una recalificación autorizada de históricos.
+  if (['waiter', 'captain', 'cook', 'barman', 'chef_manager', 'assistant_manager'].includes(roleCode)) {
+    return gradePracticalGenerico(roleCode, answers)
+  }
+  return {
+    aiReport: {
+      status: 'banco_no_reconocido',
+      note: 'Las preguntas no son del banco vigente del puesto; no se califica.',
+    },
+    score: null,
+    passed: null,
+  }
 }
