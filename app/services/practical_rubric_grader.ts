@@ -359,6 +359,7 @@ Devuelve SOLO este JSON: { "elementos": [{ "id": "<id>", ${perspectiva === 'pues
 export type DefectoElemento =
   | 'no_hace'
   | 'negada'
+  | 'sin_accion_clave'
   | 'incompleto'
   | 'generica'
   | 'solo_lo_suyo'
@@ -386,7 +387,24 @@ export function citaNegada(cita: string, textoElemento: string): boolean {
     .map((c) => c.trim().replace(/^[«"“'¿¡(\s-]+/, ''))
     .filter((c) => /[\p{L}]/u.test(c))
   if (!clausulas.length) return false
-  return clausulas.every((c) => NEGACION.test(c) && !NEGACION_QUE_AFIRMA.test(c))
+  return clausulas.every((c) => NEGACION.test(c) && !NEGACION_QUE_AFIRMA.test(c) && !NEGACION_CONDICIONAL.test(c))
+}
+
+// «No se reabre hasta que el técnico descarte la fuga» = sólo reabre cuando
+// el técnico lo confirma: afirma la acción con su condición (DEV, Encargado P8).
+const NEGACION_CONDICIONAL = /\bhasta (que|no|tener|haber|confirmar|comprobar)\b/i
+
+/**
+ * El elemento ya trae su propia condición («Si deciden esperar, los anota…»,
+ * «si es de alto valor… hasta que el gerente autorice»): cumplirla bajo esa
+ * misma condición no es «condicionada» (DEV: «Si aceptan, anoto nombre…»).
+ */
+export function sinAccionClave(cita: string, el: { texto: string; requiere?: string } | undefined): boolean {
+  return !!el?.requiere && !new RegExp(el.requiere, 'i').test(cita)
+}
+
+export function elementoTraeCondicion(texto: string): boolean {
+  return /^si\b|[,;:]\s*si\b|\bsi es\b|\bhasta que\b|visto bueno|autoriz/i.test(texto.trim())
 }
 
 /**
@@ -402,10 +420,12 @@ export function citaNegada(cita: string, textoElemento: string): boolean {
 export function defectoDelElemento(
   c: Record<string, unknown> | undefined,
   admiteEscalar: boolean,
-  // Catálogo: sólo los elementos con `partes` exigen "completo" (booleano).
   // v3.5: antes se exigía en todos y el modelo trataba como obligatorio cada
   // detalle del texto del elemento (falsos «parcial» en DEV, 2026-11-20).
-  exigeCompleto = false
+  // Catálogo: sólo los elementos con `partes` exigen "completo" (booleano).
+  exigeCompleto = false,
+  // Catálogo: el elemento ya trae la condición; «condicionada» no aplica.
+  admiteCondicion = false
 ): DefectoElemento | null {
   if (!c || typeof c.hace !== 'boolean') return 'sin_respuesta'
   if (exigeCompleto && typeof c.completo !== 'boolean') return 'sin_respuesta'
@@ -414,7 +434,7 @@ export function defectoDelElemento(
   if (c.generica === true) return 'generica'
   if (c.solo_lo_suyo === true) return 'solo_lo_suyo'
   if (c.delega === true && !admiteEscalar) return 'delega'
-  if (c.condicionada === true) return 'condicionada'
+  if (c.condicionada === true && !admiteCondicion) return 'condicionada'
   return null
 }
 
@@ -870,7 +890,9 @@ export async function gradeConRubrica(opts: {
         .map((e: any) => ({ id: String(e.id), cita: String(e.cita ?? ''), motivo: e.confirmacion }))
       const literal = opts.perspectiva === 'puesto'
       const r0 = interpretarPregunta(p, respuesta, raw, literal)
-      if (!r0.elementos.length || r0.errores.length) return { ...base, ...r0, erroresDescartados }
+      // Con error crítico la pregunta vale 0, pero sus elementos también se
+      // confirman: el reporte no muestra evidencia sin verificar (V2-07−).
+      if (!r0.elementos.length) return { ...base, ...r0, erroresDescartados }
       const partesDe = (id: string) =>
         (p.esenciales.find((x) => x.id === id) as { partes?: string[] } | undefined)?.partes
       const v = await llamar(
@@ -895,10 +917,11 @@ export async function gradeConRubrica(opts: {
         .map(({ e, c }) => ({
           id: e.id,
           cita: e.cita,
-          defecto: opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
+          defecto: opts.perspectiva === 'puesto' && sinAccionClave(e.cita, p.esenciales.find((x) => x.id === e.id) as { texto: string; requiere?: string } | undefined) ? ('sin_accion_clave' as const) : opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
             c,
             elementoAdmiteEscalar(e.texto, opts.perspectiva),
-            opts.perspectiva === 'puesto' && !!partesDe(e.id)?.length
+            opts.perspectiva === 'puesto' && !!partesDe(e.id)?.length,
+            opts.perspectiva === 'puesto' && elementoTraeCondicion(e.texto)
           ),
           motivo: c?.motivo ?? null,
         }))

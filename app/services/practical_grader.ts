@@ -40,12 +40,16 @@ const RUBRICA_POR_BANCO = {
 
 /** Práctico por rúbrica del puesto (catálogo 2026-11-16): todos los puestos. */
 export const PRACTICAL_GRADING_VERSION_CATALOGO = {
+  // v3.9 (2026-11-20, cierre): partes en lista y reabre; acción clave en conteo;
+  // con error crítico también se confirman los elementos.
+  // v3.8 (2026-11-20, cierre): «no … hasta que …» afirma; un elemento con su
+  // propia condición no es «condicionada»; partes en precio y tortilla.
   // v3.7 (2026-11-20): una cita que niega la acción no la acredita.
   // v3.6 (2026-11-20): ids del modelo con acento o eñe se reconocen.
   // v3.5 (2026-11-20, DEV): «completo» sólo con partes explícitas de la ficha;
   // alternativas válidas en la confirmación. v3.4 (2026-11-19, ronda 4): perspectiva del puesto, partes obligatorias
   // completas, citas literales y recuperación de citas reformuladas.
-  grader: 'practico-rubrica-v3.7',
+  grader: 'practico-rubrica-v3.9',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 
