@@ -9,7 +9,14 @@ import {
   elementoAdmiteEscalar,
   gradeConRubrica,
 } from '#services/practical_rubric_grader'
-import { confirmacionValida, consolidar, gradeCompetencias, leerConfirmaciones } from '#services/competency_grader'
+import {
+  confirmacionValida,
+  consolidar,
+  cuentaAlgoHecho,
+  fuerzaConfirmada,
+  gradeCompetencias,
+  leerConfirmaciones,
+} from '#services/competency_grader'
 import { CATALOGO, enunciadosPractico, preguntasAbiertas } from '#services/exam_catalog/index'
 
 // Defectos confirmados por la verificación independiente de Codex, ronda 4
@@ -110,6 +117,12 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
     // El elemento ya es una negación: su cita negativa sí lo cumple.
     assert.isFalse(citaNegada('No los siento con Ana', 'No los sienta con Ana, porque ya tiene la mayor carga'))
     assert.isFalse(citaNegada('Noto que falta', 'Revisa el conteo'))
+    // Revisión final de Codex (B3): negaciones que afirman la acción.
+    assert.isFalse(citaNegada('No omito el conteo: vuelvo a contar las botellas', 'Revisa el conteo'))
+    assert.isFalse(citaNegada('No sólo reviso el conteo: vuelvo a contar las botellas', 'Revisa el conteo'))
+    assert.isFalse(citaNegada('no espero a que se le pase, llamo al 911', 'Activa de inmediato la ayuda médica'))
+    assert.isFalse(citaNegada('No dejo de contar las botellas', 'Revisa el conteo'))
+    assert.isTrue(citaNegada('No volvería a contar las botellas; no hace falta', 'Revisa el conteo'))
     const resp = 'No llamo a emergencias. Me quedo con el cliente.'
     const llm = async (prompt: string) => {
       if (prompt.includes('ELEMENTOS ACREDITADOS'))
@@ -371,5 +384,52 @@ test.group('ronda 4 · contrastes de la segunda revisión de Codex (sin modelo)'
     })
     const q8 = r.aiReport.preguntas.find((p: any) => p.q === 8)!
     assert.deepEqual(q8.elementos.map((e: any) => e.id), ['emergencias'])
+  })
+})
+
+test.group('revisión final de Codex · competencias (B1 y B2)', () => {
+  test('B2: «fuerte» sólo con una señal fuerte confirmada', ({ assert }) => {
+    assert.equal(fuerzaConfirmada('fuerte', { muestra_fuerte: true }), 'fuerte')
+    assert.equal(fuerzaConfirmada('fuerte', { muestra_fuerte: false }), 'suficiente')
+    assert.equal(fuerzaConfirmada('fuerte', {}), 'suficiente')
+    assert.equal(fuerzaConfirmada('fuerte', undefined), 'suficiente')
+    assert.equal(fuerzaConfirmada('suficiente', { muestra_fuerte: false }), 'suficiente')
+    assert.equal(fuerzaConfirmada('debil', { muestra_fuerte: true }), 'debil')
+  })
+
+  test('B1: detecta respuestas que cuentan algo hecho', ({ assert }) => {
+    assert.isTrue(cuentaAlgoHecho('Fui con permiso a observar el pase'))
+    assert.isTrue(cuentaAlgoHecho('Probé que las reservas tuvieran confirmación'))
+    assert.isTrue(cuentaAlgoHecho('Aprendí a identificar cargos pendientes'))
+    assert.isFalse(cuentaAlgoHecho('Así lo haría: revisaría qué falta y avisaría aquí'))
+    assert.isFalse(cuentaAlgoHecho(''))
+  })
+
+  test('B1: un relato omitido en una respuesta mixta se recupera y se confirma', async ({ assert }) => {
+    const ficha = CATALOGO.general_manager
+    const preguntas = ficha.competencias.preguntas
+    const q = preguntas.findIndex((p) => p.eje === 'inteligencia_curiosa') + 1
+    const resp = 'Fui con permiso a observar cómo cerraban caja en otra sucursal. Si me pasara hoy, preguntaría al gerente.'
+    const answers = Object.fromEntries(preguntas.map((p, i) => [`q${i + 1}`, { question: p.texto, answer: i + 1 === q ? resp : '' }]))
+    const prompts: string[] = []
+    const llm = async (prompt: string) => {
+      prompts.push(prompt)
+      if (prompt.includes('no se extrajo ningún RELATO'))
+        return { evidencias: [{ q, cita: 'Fui con permiso a observar cómo cerraban caja en otra sucursal', clase: 'relato', fuerza: 'fuerte', senal: 'busca aprender' }] }
+      if (prompt.includes('Preguntas cerradas sobre frases'))
+        return { citas: [0, 1].map((n) => ({ n, accion_propia: true, ya_lo_hizo: n === 1, muestra_fuerte: false })) }
+      if (prompt.includes('inteligencia') || prompt.includes('Curiosidad') || prompt.includes('curios'))
+        return { evidencias: [{ q, cita: 'preguntaría al gerente', clase: 'criterio', fuerza: 'suficiente', senal: 'x' }], revisadas: [q], alerta: { presente: false } }
+      return { evidencias: [], revisadas: [], alerta: { presente: false } }
+    }
+    const r = await gradeCompetencias({ ficha, answers, version: {}, llm })
+    const c = r.aiReport.competencias.find((x: any) => x.eje === 'inteligencia_curiosa')!
+    assert.isTrue(prompts.some((p) => p.includes('no se extrajo ningún RELATO')))
+    const rel = c.evidencias.find((e: any) => e.clase === 'relato')!
+    assert.isTrue(rel.recuperada)
+    // Sin señal fuerte confirmada, el relato queda en «suficiente».
+    assert.equal(rel.fuerza, 'suficiente')
+    assert.equal(c.tipoEvidencia, 'conducta_relatada')
+    assert.equal(c.nivel, 2)
   })
 })

@@ -367,15 +367,26 @@ export type DefectoElemento =
   | 'sin_respuesta'
 
 const NEGACION = /^(no|nunca|jam[aá]s|tampoco|ni)\b/i
+// «No sólo…», «no omito…», «no dejo de…», «no olvido…»: afirman la acción.
+const NEGACION_QUE_AFIRMA = /^no\s+(s[oó]lo|solamente|nada m[aá]s|omito|omitir[ií]a|olvido|olvidar[ií]a|me olvido|dejo de|dejar[ií]a de|paso por alto)\b/i
 
 /**
  * La cita niega la acción que pide el elemento («No volvería a contar las
  * botellas» para «Revisa el conteo»). Lo decide el código: el modelo llegó a
  * confirmar esa frase como si contara (contraste F- de Codex, 2026-11-20).
- * Un elemento que ya es una negación («No los sienta con Ana») no aplica.
+ * Sólo es negada si NINGUNA de sus cláusulas afirma algo: «No omito el
+ * conteo: vuelvo a contar» o «no espero; llamo al 911» sí afirman (revisión
+ * final de Codex, B3). Un elemento que ya es una negación («No los sienta
+ * con Ana») no aplica.
  */
 export function citaNegada(cita: string, textoElemento: string): boolean {
-  return !NEGACION.test(textoElemento.trim()) && NEGACION.test(cita.trim().replace(/^[«"“'¿¡(\s]+/, ''))
+  if (NEGACION.test(textoElemento.trim())) return false
+  const clausulas = cita
+    .split(/[,;:.!?]|\b(?:sino|pero|y luego|en cambio)\b/i)
+    .map((c) => c.trim().replace(/^[«"“'¿¡(\s-]+/, ''))
+    .filter((c) => /[\p{L}]/u.test(c))
+  if (!clausulas.length) return false
+  return clausulas.every((c) => NEGACION.test(c) && !NEGACION_QUE_AFIRMA.test(c))
 }
 
 /**
