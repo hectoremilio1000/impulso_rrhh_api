@@ -423,6 +423,8 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
             id: 'reabre',
             texto:
               'Solo reabre el gas cuando un técnico o la compañía confirman que no hay fuga, y reenciende con procedimiento',
+            // v2.3 (cierre): «lo abro cuando yo considero que no hay fuga» no cumple (contraste V2-07−).
+            partes: ['quien confirma que no hay fuga es un técnico, la compañía de gas o personal autorizado, no su propia impresión'],
           },
         ],
         minimoCorrecta: 4,
@@ -607,6 +609,9 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
           {
             id: 'conteo',
             texto: 'Parte de un conteo físico de lo que hay, no de memoria',
+            // v2.3 (cierre): «resto inventario utilizable» no dice que cuente; el
+            // modelo lo aceptó en una corrida y lo rechazó en otra.
+            requiere: '\\b(cont|cuent|recuent|recont|f[ií]sic|existencias|pes[oa])',
           },
           {
             id: 'cantidades',

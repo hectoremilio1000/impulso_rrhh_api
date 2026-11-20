@@ -41,6 +41,12 @@ export type Elemento = {
    * esos datos; sin `partes`, se exige la acción, no cada detalle del texto.
    */
   partes?: string[]
+  /**
+   * Expresión (sin barras, insensible a mayúsculas) que la cita debe contener
+   * para acreditar el elemento. Sólo para acciones de vocabulario inequívoco
+   * («conteo»): la decide el código, no el modelo.
+   */
+  requiere?: string
 }
 
 export type Dimension = { id: string; nombre: string; peso: number }

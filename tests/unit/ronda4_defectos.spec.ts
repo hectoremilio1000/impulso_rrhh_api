@@ -5,6 +5,7 @@ import {
   buildPromptPregunta,
   citaNegada,
   elementoTraeCondicion,
+  sinAccionClave,
   idDelCatalogo,
   defectoDelElemento,
   elementoAdmiteEscalar,
@@ -76,7 +77,7 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
         p.esenciales.filter((e) => e.partes?.length).map((e) => `${code}:${p.q}:${e.id}`)
       )
     )
-    assert.deepEqual(conPartes, ['hostess:1:registra', 'hostess:12:registro', 'kitchen_manager:1:tortilla', 'kitchen_manager:12:precio'])
+    assert.deepEqual(conPartes, ['hostess:1:registra', 'hostess:3:lista', 'hostess:12:registro', 'kitchen_manager:1:tortilla', 'kitchen_manager:8:reabre', 'kitchen_manager:12:precio'])
     const h1 = preguntasAbiertas(CATALOGO.hostess).find((p) => p.q === 1)!
     assert.include(buildPromptPregunta('Hostess', h1, 'x', 'x', 'puesto'), '[partes obligatorias: el nombre; un dato de contacto o cómo les avisará]')
   })
@@ -159,6 +160,42 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
     const ok = { hace: true, generica: false, solo_lo_suyo: false, delega: false }
     assert.isNull(defectoDelElemento({ ...ok, condicionada: true }, false, false, true))
     assert.equal(defectoDelElemento({ ...ok, condicionada: true }, false, false, false), 'condicionada')
+  })
+
+  test('acción clave por vocabulario: «resto inventario» no es contar (cierre)', ({ assert }) => {
+    const KM = preguntasAbiertas(CATALOGO.kitchen_manager).find((p) => p.q === 12)!
+    const conteo = KM.esenciales.find((e) => e.id === 'conteo')!
+    assert.isTrue(sinAccionClave('resto inventario utilizable', conteo))
+    assert.isFalse(sinAccionClave('cuento lo que hay en cámara', conteo))
+    assert.isFalse(sinAccionClave('hago un conteo físico', conteo))
+    assert.isFalse(sinAccionClave('reviso las existencias reales', conteo))
+    assert.isFalse(sinAccionClave('cualquier cosa', { texto: 'x' }))
+  })
+
+  test('con error crítico, los elementos también se confirman (cierre, V2-07−)', async ({ assert }) => {
+    const KM8 = preguntasAbiertas(CATALOGO.kitchen_manager).find((p) => p.q === 8)!
+    const banco = enunciadosPractico(CATALOGO.kitchen_manager)
+    const resp = 'Mantengo cerrado. Lo abro cuando yo considero que ya no hay fuga. Sigo cocinando.'
+    const prompts: string[] = []
+    const llm = async (prompt: string) => {
+      prompts.push(prompt)
+      if (prompt.includes('MALA PRÁCTICA')) return { confirma: true, motivo: 'sigue cocinando' }
+      if (prompt.includes('ELEMENTOS ACREDITADOS'))
+        return { elementos: [{ id: 'reabre', completo: false, hace: true, generica: false, solo_lo_suyo: false, delega: false, condicionada: false }] }
+      return {
+        elementos: [{ id: 'reabre', presente: true, cita: 'Lo abro cuando yo considero que ya no hay fuga' }],
+        errores: [{ id: KM8.erroresCriticos[0].id, presente: true, cita: 'Sigo cocinando' }],
+      }
+    }
+    const answers = Object.fromEntries(banco.map((t, i) => [`q${i + 1}`, { question: t, answer: i + 1 === 8 ? resp : '' }]))
+    const r = await gradeConRubrica({
+      rol: 'Encargado de cocina', rubrica: [KM8], answers, version: {}, passThreshold: 70,
+      preguntasBanco: banco, perspectiva: 'puesto', sinDecisionAutomatica: true, llm,
+    })
+    const q8 = r.aiReport.preguntas.find((p: any) => p.q === 8)!
+    assert.equal(q8.estado, 'error_critico')
+    assert.isTrue(prompts.some((p) => p.includes('ELEMENTOS ACREDITADOS')))
+    assert.deepEqual(q8.elementos.map((e: any) => e.id), [])
   })
 
   test('escalar se decide por destinatario y verbo, no por mencionar al gerente', ({ assert }) => {

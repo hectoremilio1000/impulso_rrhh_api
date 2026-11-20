@@ -359,6 +359,7 @@ Devuelve SOLO este JSON: { "elementos": [{ "id": "<id>", ${perspectiva === 'pues
 export type DefectoElemento =
   | 'no_hace'
   | 'negada'
+  | 'sin_accion_clave'
   | 'incompleto'
   | 'generica'
   | 'solo_lo_suyo'
@@ -398,6 +399,10 @@ const NEGACION_CONDICIONAL = /\bhasta (que|no|tener|haber|confirmar|comprobar)\b
  * «si es de alto valor… hasta que el gerente autorice»): cumplirla bajo esa
  * misma condición no es «condicionada» (DEV: «Si aceptan, anoto nombre…»).
  */
+export function sinAccionClave(cita: string, el: { texto: string; requiere?: string } | undefined): boolean {
+  return !!el?.requiere && !new RegExp(el.requiere, 'i').test(cita)
+}
+
 export function elementoTraeCondicion(texto: string): boolean {
   return /^si\b|[,;:]\s*si\b|\bsi es\b|\bhasta que\b|visto bueno|autoriz/i.test(texto.trim())
 }
@@ -885,7 +890,9 @@ export async function gradeConRubrica(opts: {
         .map((e: any) => ({ id: String(e.id), cita: String(e.cita ?? ''), motivo: e.confirmacion }))
       const literal = opts.perspectiva === 'puesto'
       const r0 = interpretarPregunta(p, respuesta, raw, literal)
-      if (!r0.elementos.length || r0.errores.length) return { ...base, ...r0, erroresDescartados }
+      // Con error crítico la pregunta vale 0, pero sus elementos también se
+      // confirman: el reporte no muestra evidencia sin verificar (V2-07−).
+      if (!r0.elementos.length) return { ...base, ...r0, erroresDescartados }
       const partesDe = (id: string) =>
         (p.esenciales.find((x) => x.id === id) as { partes?: string[] } | undefined)?.partes
       const v = await llamar(
@@ -910,7 +917,7 @@ export async function gradeConRubrica(opts: {
         .map(({ e, c }) => ({
           id: e.id,
           cita: e.cita,
-          defecto: opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
+          defecto: opts.perspectiva === 'puesto' && sinAccionClave(e.cita, p.esenciales.find((x) => x.id === e.id) as { texto: string; requiere?: string } | undefined) ? ('sin_accion_clave' as const) : opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
             c,
             elementoAdmiteEscalar(e.texto, opts.perspectiva),
             opts.perspectiva === 'puesto' && !!partesDe(e.id)?.length,

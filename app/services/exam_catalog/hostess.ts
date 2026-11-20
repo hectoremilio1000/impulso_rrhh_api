@@ -151,6 +151,9 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
           {
             id: 'lista',
             texto: 'Si deciden esperar, los anota en la lista con nombre, número de personas y contacto',
+            // v2.3 (cierre): Codex acredita con un solo dato (C5: «tomo su contacto»),
+            // no «registro que hay un grupo esperando» (contraste V2-01−).
+            partes: ['al menos un dato para identificarlos o avisarles: su nombre o un contacto'],
           },
           {
             id: 'actualiza',
