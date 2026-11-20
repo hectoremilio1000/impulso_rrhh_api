@@ -3,6 +3,8 @@ import { fragmentoLiteral } from '#services/cita_literal'
 import {
   buildPromptConfirmaElementos,
   buildPromptPregunta,
+  citaNegada,
+  idDelCatalogo,
   defectoDelElemento,
   elementoAdmiteEscalar,
   gradeConRubrica,
@@ -39,18 +41,98 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
   const answers = (q: number, texto: string) =>
     Object.fromEntries(BANCO.map((t, i) => [`q${i + 1}`, { question: t, answer: i + 1 === q ? texto : '' }]))
 
-  test('partes obligatorias: «completo: false» rechaza el elemento (sólo en el catálogo)', ({ assert }) => {
+  test('partes obligatorias: «completo» sólo se exige en elementos con `partes` (v3.5)', ({ assert }) => {
     const ok = { hace: true, generica: false, solo_lo_suyo: false, delega: false, condicionada: false }
     assert.equal(defectoDelElemento({ ...ok, completo: false }, false, true), 'incompleto')
     assert.isNull(defectoDelElemento({ ...ok, completo: true }, false, true))
-    // En el catálogo "completo" es obligatorio y booleano: ausente, null o "false" no confirman.
+    // Con partes, "completo" es obligatorio y booleano: ausente, null o "false" no confirman.
     for (const v of [undefined, null, 'false'])
       assert.equal(defectoDelElemento({ ...ok, completo: v } as any, false, true), 'sin_respuesta')
-    // Subgerente no pregunta "completo": sin el campo nada cambia.
+    // Sin partes (y en Subgerente) "completo" no decide: falsos «parcial» en DEV, 2026-11-20.
+    assert.isNull(defectoDelElemento({ ...ok, completo: false }, false, false))
     assert.isNull(defectoDelElemento(ok, false))
-    const c = buildPromptConfirmaElementos('p', [{ id: 'x', texto: 'y', cita: 'z' }], 'z', 'puesto', 'Gerente')
-    assert.include(c, '"completo": ¿la respuesta dice TODAS las partes obligatorias')
+    const c = buildPromptConfirmaElementos(
+      'p',
+      [{ id: 'x', texto: 'Anota al grupo', cita: 'z', partes: ['el nombre', 'un contacto'] }, { id: 'w', texto: 'y', cita: 'z' }],
+      'z', 'puesto', 'Hostess', ['Avisar directamente a cocina']
+    )
+    assert.include(c, 'PARTES OBLIGATORIAS: el nombre; un contacto')
+    assert.equal(c.split('PARTES OBLIGATORIAS:').length - 1, 2) // una en la instrucción, una en el elemento x
+    assert.include(c, '- Avisar directamente a cocina')
     assert.notInclude(buildPromptConfirmaElementos('p', [{ id: 'x', texto: 'y', cita: 'z' }], 'z'), '"completo"')
+    assert.notInclude(buildPromptConfirmaElementos('p', [{ id: 'x', texto: 'y', cita: 'z', partes: ['a'] }], 'z'), 'PARTES')
+  })
+
+  test('la ficha declara partes sólo donde el elemento existe para esos datos', ({ assert }) => {
+    const conPartes = (['hostess', 'kitchen_manager', 'general_manager'] as const).flatMap((code) =>
+      preguntasAbiertas(CATALOGO[code]).flatMap((p) =>
+        p.esenciales.filter((e) => e.partes?.length).map((e) => `${code}:${p.q}:${e.id}`)
+      )
+    )
+    assert.deepEqual(conPartes, ['hostess:1:registra', 'hostess:12:registro'])
+    const h1 = preguntasAbiertas(CATALOGO.hostess).find((p) => p.q === 1)!
+    assert.include(buildPromptPregunta('Hostess', h1, 'x', 'x', 'puesto'), '[partes obligatorias: el nombre; un dato de contacto o cómo les avisará]')
+  })
+
+  test('ids con acento o eñe del modelo se reconocen («acompaña» = acompana)', async ({ assert }) => {
+    const cat = [{ id: 'acompana' }, { id: 'bano' }, { id: 'emergencias' }]
+    assert.equal(idDelCatalogo('acompaña', cat), 'acompana')
+    assert.equal(idDelCatalogo('Baño', cat), 'bano')
+    assert.equal(idDelCatalogo('otro', cat), 'otro')
+    const resp = 'Pido ambulancia de inmediato y me quedo con el cliente mientras llega.'
+    const llm = async (prompt: string) => {
+      if (prompt.includes('ELEMENTOS ACREDITADOS'))
+        return {
+          elementos: ['emergencias', 'acompaña'].map((id) => ({
+            id, hace: true, generica: false, solo_lo_suyo: false, delega: false, condicionada: false,
+          })),
+        }
+      return {
+        elementos: [
+          { id: 'emergencias', presente: true, cita: 'Pido ambulancia de inmediato' },
+          { id: 'acompaña', presente: true, cita: 'me quedo con el cliente mientras llega' },
+        ],
+        errores: [],
+      }
+    }
+    const r = await gradeConRubrica({
+      rol: 'Gerente', rubrica: [P8], answers: answers(8, resp), version: {}, passThreshold: 70,
+      preguntasBanco: BANCO, perspectiva: 'puesto', sinDecisionAutomatica: true, llm,
+    })
+    const q8 = r.aiReport.preguntas.find((p: any) => p.q === 8)!
+    assert.sameMembers(q8.elementos.map((e: any) => e.id), ['emergencias', 'acompana'])
+  })
+
+  test('una cita que niega la acción no la acredita (contraste F-)', async ({ assert }) => {
+    assert.isTrue(citaNegada('No volvería a contar las botellas', 'Revisa el conteo (vuelve a contar inicial o final)'))
+    assert.isTrue(citaNegada('«Nunca lo anoto»', 'Anota qué falló'))
+    assert.isFalse(citaNegada('volver a contar las botellas', 'Revisa el conteo'))
+    // El elemento ya es una negación: su cita negativa sí lo cumple.
+    assert.isFalse(citaNegada('No los siento con Ana', 'No los sienta con Ana, porque ya tiene la mayor carga'))
+    assert.isFalse(citaNegada('Noto que falta', 'Revisa el conteo'))
+    const resp = 'No llamo a emergencias. Me quedo con el cliente.'
+    const llm = async (prompt: string) => {
+      if (prompt.includes('ELEMENTOS ACREDITADOS'))
+        return {
+          elementos: ['emergencias', 'acompana'].map((id) => ({
+            id, hace: true, generica: false, solo_lo_suyo: false, delega: false, condicionada: false,
+          })),
+        }
+      return {
+        elementos: [
+          { id: 'emergencias', presente: true, cita: 'No llamo a emergencias' },
+          { id: 'acompana', presente: true, cita: 'Me quedo con el cliente' },
+        ],
+        errores: [],
+      }
+    }
+    const r = await gradeConRubrica({
+      rol: 'Gerente', rubrica: [P8], answers: answers(8, resp), version: {}, passThreshold: 70,
+      preguntasBanco: BANCO, perspectiva: 'puesto', sinDecisionAutomatica: true, llm,
+    })
+    const q8 = r.aiReport.preguntas.find((p: any) => p.q === 8)!
+    assert.deepEqual(q8.elementos.map((e: any) => e.id), ['acompana'])
+    assert.equal(q8.elementosRechazados!.find((x: any) => x.id === 'emergencias')!.defecto, 'negada')
   })
 
   test('escalar se decide por destinatario y verbo, no por mencionar al gerente', ({ assert }) => {
@@ -64,7 +146,7 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
     const a = buildPromptPregunta('Encargado de cocina', P8, BANCO[7], 'x', 'puesto')
     assert.include(a, 'Repetir un dato del caso\n  sin dirigirlo a nadie no cuenta.')
     assert.include(a, '("que el gerente arme el horario") NO cumple ese elemento.')
-    assert.include(a, '("resto inventario" no es contar\n  físicamente)')
+    assert.include(a, 'No infieras acciones no\n  dichas ("resto inventario" no es contar físicamente)')
   })
 
   test('cita reformulada: se pide la literal y, si está, el elemento cuenta con la cita del candidato', async ({ assert }) => {

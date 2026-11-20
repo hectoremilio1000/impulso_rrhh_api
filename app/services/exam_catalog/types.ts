@@ -32,7 +32,16 @@ export const EJES: Eje[] = [
   'optimismo_bondadoso',
 ]
 
-export type Elemento = { id: string; texto: string }
+export type Elemento = {
+  id: string
+  texto: string
+  /**
+   * Partes que la respuesta debe decir todas para acreditar el elemento
+   * (p. ej. los datos de un registro). Sólo cuando el elemento existe para
+   * esos datos; sin `partes`, se exige la acción, no cada detalle del texto.
+   */
+  partes?: string[]
+}
 
 export type Dimension = { id: string; nombre: string; peso: number }
 
