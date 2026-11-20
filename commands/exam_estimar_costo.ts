@@ -105,7 +105,7 @@ export default class ExamEstimarCosto extends BaseCommand {
         }
         case 'competencias:reintento_confirmacion':
           return {
-            citas: [...prompt.matchAll(/- n (\d+)/g)].map((m) => ({ n: Number(m[1]), accion_propia: true, ya_lo_hizo: true, muestra_fuerte: true })),
+            citas: [...prompt.matchAll(/- n (\d+)/g)].map((m) => ({ n: Number(m[1]), accion_propia: true, ya_lo_hizo: true })),
           }
         case 'competencias:confirmar_alerta':
           return { confirma: true, motivo: 'm' }

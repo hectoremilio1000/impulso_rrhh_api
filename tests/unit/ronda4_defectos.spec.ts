@@ -13,7 +13,6 @@ import {
   confirmacionValida,
   consolidar,
   cuentaAlgoHecho,
-  fuerzaConfirmada,
   gradeCompetencias,
   leerConfirmaciones,
 } from '#services/competency_grader'
@@ -387,16 +386,7 @@ test.group('ronda 4 · contrastes de la segunda revisión de Codex (sin modelo)'
   })
 })
 
-test.group('revisión final de Codex · competencias (B1 y B2)', () => {
-  test('B2: «fuerte» sólo con una señal fuerte confirmada', ({ assert }) => {
-    assert.equal(fuerzaConfirmada('fuerte', { muestra_fuerte: true }), 'fuerte')
-    assert.equal(fuerzaConfirmada('fuerte', { muestra_fuerte: false }), 'suficiente')
-    assert.equal(fuerzaConfirmada('fuerte', {}), 'suficiente')
-    assert.equal(fuerzaConfirmada('fuerte', undefined), 'suficiente')
-    assert.equal(fuerzaConfirmada('suficiente', { muestra_fuerte: false }), 'suficiente')
-    assert.equal(fuerzaConfirmada('debil', { muestra_fuerte: true }), 'debil')
-  })
-
+test.group('revisión final de Codex · competencias (B1)', () => {
   test('B1: detecta respuestas que cuentan algo hecho', ({ assert }) => {
     assert.isTrue(cuentaAlgoHecho('Fui con permiso a observar el pase'))
     assert.isTrue(cuentaAlgoHecho('Probé que las reservas tuvieran confirmación'))
@@ -417,7 +407,7 @@ test.group('revisión final de Codex · competencias (B1 y B2)', () => {
       if (prompt.includes('no se extrajo ningún RELATO'))
         return { evidencias: [{ q, cita: 'Fui con permiso a observar cómo cerraban caja en otra sucursal', clase: 'relato', fuerza: 'fuerte', senal: 'busca aprender' }] }
       if (prompt.includes('Preguntas cerradas sobre frases'))
-        return { citas: [0, 1].map((n) => ({ n, accion_propia: true, ya_lo_hizo: n === 1, muestra_fuerte: false })) }
+        return { citas: [0, 1].map((n) => ({ n, accion_propia: true, ya_lo_hizo: n === 1 })) }
       if (prompt.includes('inteligencia') || prompt.includes('Curiosidad') || prompt.includes('curios'))
         return { evidencias: [{ q, cita: 'preguntaría al gerente', clase: 'criterio', fuerza: 'suficiente', senal: 'x' }], revisadas: [q], alerta: { presente: false } }
       return { evidencias: [], revisadas: [], alerta: { presente: false } }
@@ -427,9 +417,8 @@ test.group('revisión final de Codex · competencias (B1 y B2)', () => {
     assert.isTrue(prompts.some((p) => p.includes('no se extrajo ningún RELATO')))
     const rel = c.evidencias.find((e: any) => e.clase === 'relato')!
     assert.isTrue(rel.recuperada)
-    // Sin señal fuerte confirmada, el relato queda en «suficiente».
-    assert.equal(rel.fuerza, 'suficiente')
+    assert.equal(rel.fuerza, 'fuerte')
     assert.equal(c.tipoEvidencia, 'conducta_relatada')
-    assert.equal(c.nivel, 2)
+    assert.equal(c.nivel, 3)
   })
 })

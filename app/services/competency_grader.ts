@@ -26,10 +26,11 @@ export const COMPETENCY_GRADING_VERSION = {
   // sólo da nivel si la pregunta pedía lo que haría; sin puntaje global.
   // v2.1: todas las preguntas del eje, respuestas mixtas divididas, citas
   // literales y estado explícito de lo que no se pudo confirmar.
-  // v2.2 (2026-11-20, revisión final de Codex): «fuerte» sólo si la
-  // confirmación cerrada ve una señal FUERTE del ancla; relatos omitidos en
-  // respuestas mixtas se recuperan con una llamada aparte.
-  grader: 'competencias-evidencia-v2.2',
+  // v2.3 (2026-11-20): relatos omitidos en respuestas mixtas se recuperan
+  // con una llamada aparte (Codex, B1). Se retiró la comprobación de fuerza
+  // de v2.2: en DEV bajó 19 niveles correctos y no corrigió los casos que
+  // buscaba (B2 sigue abierto; ver docs/examenes/AUDITORIA_GASTO.md).
+  grader: 'competencias-evidencia-v2.3',
   agregacion: 'por-eje-sin-global-v1',
   model: process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO,
 } as const
@@ -206,22 +207,6 @@ export function consolidar(
   return { nivel, tipoEvidencia, faltaVerificar }
 }
 
-/** Señales del ancla FUERTE de la competencia (la última). */
-function fuertes(eje: Eje): string {
-  const a = RUBRICAS[eje].anclas
-  return (a[a.length - 1]?.senales ?? []).map((x) => `        · ${x}`).join('\n')
-}
-
-/**
- * «fuerte» se sostiene sólo con la confirmación cerrada de una señal fuerte
- * del ancla (pura). Sin confirmación válida, o en false, baja a «suficiente».
- * Antes la fuerza del extractor pasaba sin revisión (Codex, B2: relatos de un
- * error sin corrección llegaban a nivel 3).
- */
-export function fuerzaConfirmada(fuerza: Fuerza, c: { muestra_fuerte?: unknown } | undefined): Fuerza {
-  return fuerza === 'fuerte' && c?.muestra_fuerte !== true ? 'suficiente' : fuerza
-}
-
 /**
  * Preguntas cerradas sobre cada cita (2026-11-19): el código decide la clase.
  * El modelo, al extraer, llamaba «criterio» a declaraciones de valores («para
@@ -250,14 +235,8 @@ Para cada frase, leída dentro de su respuesta completa, contesta true o false:
   "ya_lo_hizo": ¿cuenta algo que el propio candidato YA HIZO (en pasado, con
       su acción)? Es false si su acción está en condicional o futuro ("haría",
       "la próxima vez…"), aunque la situación sí haya pasado.
-  "muestra_fuerte": ¿la frase, por sí sola, muestra una de estas señales
-      FUERTES?
-${fuertes(eje)}
-      Es false si sólo reconoce un problema o un error sin decir qué hizo para
-      corregirlo, si esa corrección está en condicional, o si hace falta
-      suponer algo que la frase no dice.
 
-Devuelve SOLO: { "citas": [{ "n": 0, "accion_propia": true, "ya_lo_hizo": false, "muestra_fuerte": false }] }`
+Devuelve SOLO: { "citas": [{ "n": 0, "accion_propia": true, "ya_lo_hizo": false }] }`
 }
 
 export function confirmacionValida(c: any): boolean {
@@ -484,8 +463,7 @@ export async function gradeCompetencias(opts: {
           const clase = ok ? claseConfirmada(c, e.clase) : e.clase
           // Si la confirmación cambia la clase, la fuerza del primer juicio no
           // se hereda completa: queda como mucho en «suficiente».
-          const fuerza: Fuerza =
-            clase !== e.clase && e.fuerza === 'fuerte' ? 'suficiente' : fuerzaConfirmada(e.fuerza, ok ? c : undefined)
+          const fuerza: Fuerza = clase !== e.clase && e.fuerza === 'fuerte' ? 'suficiente' : e.fuerza
           return { ...e, claseModelo: e.clase, clase, fuerza, confirmada: ok }
         })
         Object.assign(r, consolidar(conTexto, r.evidencias.filter((e) => e.confirmada)))
