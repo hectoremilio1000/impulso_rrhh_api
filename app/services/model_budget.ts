@@ -74,24 +74,66 @@ export class Presupuesto {
   }
 }
 
-let instancia: Presupuesto | null | undefined
+/** Control de gasto que usa el cliente del modelo (libro compartido o, sólo en pruebas unitarias, archivo). */
+export type ControlGasto = {
+  precios: Precios
+  reservar(maxUsd: number, etapa: string | null): Promise<unknown>
+  liberar(reserva: unknown, registro: RegistroLlamada | null, sinCobro?: boolean): Promise<void>
+}
 
-/** Presupuesto desde el entorno, o null si no hay tope. Falla cerrado si está a medias. */
-export function presupuestoDelEntorno(): Presupuesto | null {
+/** Adaptador del contador por archivo (sólo pruebas unitarias o `PRESUPUESTO_SOLO_LOCAL=1`). */
+export function controlDeArchivo(p: Presupuesto): ControlGasto {
+  return {
+    precios: p.precios,
+    reservar: async (maxUsd) => p.reservar(maxUsd),
+    // Sin respuesta ni certeza de que no cobró: cuenta el máximo reservado.
+    liberar: async (r, registro, sinCobro = false) =>
+      p.liberar(
+        r as number,
+        registro ??
+          (sinCobro
+            ? null
+            : { at: new Date().toISOString(), modeloPedido: '?', modeloRespondio: null, systemFingerprint: null, tokensEntrada: 0, tokensSalida: 0, costoUsd: r as number })
+      ),
+  }
+}
+
+let instancia: ControlGasto | null | undefined
+
+/**
+ * Control de gasto desde el entorno, o null si no hay tope (producción).
+ * Falla cerrado: con PRESUPUESTO_USD o PRESUPUESTO_ID exige precios válidos y
+ * el LIBRO COMPARTIDO (PRESUPUESTO_DB_URL). El contador por archivo, que no
+ * ve a otros procesos ni sobrevive a un redespliegue, ya no se acepta salvo
+ * `PRESUPUESTO_SOLO_LOCAL=1` (auditoría de gasto, 2026-11-20).
+ */
+export async function controlDelEntorno(): Promise<ControlGasto | null> {
   if (instancia !== undefined) return instancia
   const limite = process.env.PRESUPUESTO_USD
-  if (!limite) return (instancia = null)
+  const id = process.env.PRESUPUESTO_ID
+  const url = process.env.PRESUPUESTO_DB_URL
+  if (!limite && !id && !url) return (instancia = null)
   const entrada = Number(process.env.PRECIO_ENTRADA_USD_POR_MTOK)
   const salida = Number(process.env.PRECIO_SALIDA_USD_POR_MTOK)
-  if (!(Number(limite) > 0) || !(entrada > 0) || !(salida > 0)) {
+  if (!(entrada > 0) || !(salida > 0)) {
     throw new PresupuestoExcedido(
-      'PRESUPUESTO: PRESUPUESTO_USD definido sin precios válidos (PRECIO_ENTRADA_USD_POR_MTOK, PRECIO_SALIDA_USD_POR_MTOK); no se envía nada.'
+      'PRESUPUESTO: faltan precios válidos (PRECIO_ENTRADA_USD_POR_MTOK, PRECIO_SALIDA_USD_POR_MTOK); no se envía nada.'
     )
   }
-  instancia = new Presupuesto(
-    Number(limite),
-    { entradaPorMTok: entrada, salidaPorMTok: salida },
-    process.env.PRESUPUESTO_BITACORA || null
+  const precios = { entradaPorMTok: entrada, salidaPorMTok: salida }
+  if (url && id) {
+    const { LibroGasto } = await import('#services/model_budget_ledger')
+    return (instancia = new LibroGasto(url, id, precios))
+  }
+  if (process.env.PRESUPUESTO_SOLO_LOCAL === '1' && Number(limite) > 0) {
+    return (instancia = controlDeArchivo(new Presupuesto(Number(limite), precios, process.env.PRESUPUESTO_BITACORA || null)))
+  }
+  throw new PresupuestoExcedido(
+    'PRESUPUESTO: se exige el libro compartido (PRESUPUESTO_DB_URL y PRESUPUESTO_ID); no se envía nada.'
   )
-  return instancia
+}
+
+/** Sólo pruebas: olvida el control ya creado. */
+export function _reiniciarControlParaPruebas() {
+  instancia = undefined
 }

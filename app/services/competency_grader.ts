@@ -288,9 +288,10 @@ async function confirmarCitas(
   eje: Eje,
   citas: CitaAConfirmar[],
   model: string,
-  onMeta: (m: any) => void
+  onMeta: (m: any) => void,
+  etapa?: string
 ) {
-  const v = await llm(buildPromptConfirmaCitas(eje, citas), { model, maxTokens: 1500, onMeta })
+  const v = await llm(buildPromptConfirmaCitas(eje, citas), { model, maxTokens: 1500, onMeta, ...(etapa ? { etapa } : {}) })
   return leerConfirmaciones(v, citas.map((c) => c.i))
 }
 
@@ -391,7 +392,10 @@ Para cada relato: "q", "cita" (COPIADA tal cual; se verifica), "clase": "relato"
 Devuelve SOLO: { "evidencias": [{ "q": 0, "cita": "", "clase": "relato", "fuerza": "suficiente", "senal": "" }] }`
 }
 
-type Llm = (prompt: string, o: { model: string; maxTokens?: number; onMeta?: (m: any) => void }) => Promise<any>
+type Llm = (
+  prompt: string,
+  o: { model: string; maxTokens?: number; onMeta?: (m: any) => void; etapa?: string }
+) => Promise<any>
 
 export async function gradeCompetencias(opts: {
   ficha: ExamenPuesto
@@ -470,7 +474,7 @@ export async function gradeCompetencias(opts: {
         // confirmadas se conservan tal cual (no se reemplaza el primer intento).
         const faltan = citas.filter((c) => !confirmacionValida(porN.get(c.i)))
         if (faltan.length) {
-          const otra = await confirmarCitas(llm, eje, faltan, model, onMeta)
+          const otra = await confirmarCitas(llm, eje, faltan, model, onMeta, 'competencias:reintento_confirmacion')
           for (const c of faltan) if (confirmacionValida(otra.get(c.i))) porN.set(c.i, otra.get(c.i))
         }
         const sinConfirmar = citas.filter((c) => !confirmacionValida(porN.get(c.i))).map((c) => c.q)
