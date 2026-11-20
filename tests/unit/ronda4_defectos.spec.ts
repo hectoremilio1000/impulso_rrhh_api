@@ -4,6 +4,7 @@ import {
   buildPromptConfirmaElementos,
   buildPromptPregunta,
   citaNegada,
+  elementoTraeCondicion,
   idDelCatalogo,
   defectoDelElemento,
   elementoAdmiteEscalar,
@@ -75,7 +76,7 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
         p.esenciales.filter((e) => e.partes?.length).map((e) => `${code}:${p.q}:${e.id}`)
       )
     )
-    assert.deepEqual(conPartes, ['hostess:1:registra', 'hostess:12:registro'])
+    assert.deepEqual(conPartes, ['hostess:1:registra', 'hostess:12:registro', 'kitchen_manager:1:tortilla', 'kitchen_manager:12:precio'])
     const h1 = preguntasAbiertas(CATALOGO.hostess).find((p) => p.q === 1)!
     assert.include(buildPromptPregunta('Hostess', h1, 'x', 'x', 'puesto'), '[partes obligatorias: el nombre; un dato de contacto o cómo les avisará]')
   })
@@ -122,6 +123,10 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
     assert.isFalse(citaNegada('no espero a que se le pase, llamo al 911', 'Activa de inmediato la ayuda médica'))
     assert.isFalse(citaNegada('No dejo de contar las botellas', 'Revisa el conteo'))
     assert.isTrue(citaNegada('No volvería a contar las botellas; no hace falta', 'Revisa el conteo'))
+    // DEV (Encargado P8): «no … hasta que …» afirma la acción con su condición.
+    assert.isFalse(citaNegada('no se reabre hasta que personal autorizado descarte la fuga', 'Solo reabre el gas cuando un técnico confirma'))
+    assert.isFalse(citaNegada('No dejamos entrar ni reanudamos hasta que personal competente descarte la fuga', 'Solo reabre el gas cuando un técnico confirma'))
+    assert.isTrue(citaNegada('No uso la mesa fría', 'Atiende primero la mesa fría'))
     const resp = 'No llamo a emergencias. Me quedo con el cliente.'
     const llm = async (prompt: string) => {
       if (prompt.includes('ELEMENTOS ACREDITADOS'))
@@ -145,6 +150,15 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
     const q8 = r.aiReport.preguntas.find((p: any) => p.q === 8)!
     assert.deepEqual(q8.elementos.map((e: any) => e.id), ['acompana'])
     assert.equal(q8.elementosRechazados!.find((x: any) => x.id === 'emergencias')!.defecto, 'negada')
+  })
+
+  test('el elemento que trae su condición no se rechaza por «condicionada» (DEV)', ({ assert }) => {
+    assert.isTrue(elementoTraeCondicion('Si deciden esperar, los anota en la lista con nombre, número de personas y contacto'))
+    assert.isTrue(elementoTraeCondicion('No usa lo que no puede demostrar como inocuo: lo desecha o, si es de alto valor, lo aparta hasta que el gerente autorice el desecho'))
+    assert.isFalse(elementoTraeCondicion('Revisa el conteo (vuelve a contar inicial o final)'))
+    const ok = { hace: true, generica: false, solo_lo_suyo: false, delega: false }
+    assert.isNull(defectoDelElemento({ ...ok, condicionada: true }, false, false, true))
+    assert.equal(defectoDelElemento({ ...ok, condicionada: true }, false, false, false), 'condicionada')
   })
 
   test('escalar se decide por destinatario y verbo, no por mencionar al gerente', ({ assert }) => {

@@ -386,7 +386,20 @@ export function citaNegada(cita: string, textoElemento: string): boolean {
     .map((c) => c.trim().replace(/^[«"“'¿¡(\s-]+/, ''))
     .filter((c) => /[\p{L}]/u.test(c))
   if (!clausulas.length) return false
-  return clausulas.every((c) => NEGACION.test(c) && !NEGACION_QUE_AFIRMA.test(c))
+  return clausulas.every((c) => NEGACION.test(c) && !NEGACION_QUE_AFIRMA.test(c) && !NEGACION_CONDICIONAL.test(c))
+}
+
+// «No se reabre hasta que el técnico descarte la fuga» = sólo reabre cuando
+// el técnico lo confirma: afirma la acción con su condición (DEV, Encargado P8).
+const NEGACION_CONDICIONAL = /\bhasta (que|no|tener|haber|confirmar|comprobar)\b/i
+
+/**
+ * El elemento ya trae su propia condición («Si deciden esperar, los anota…»,
+ * «si es de alto valor… hasta que el gerente autorice»): cumplirla bajo esa
+ * misma condición no es «condicionada» (DEV: «Si aceptan, anoto nombre…»).
+ */
+export function elementoTraeCondicion(texto: string): boolean {
+  return /^si\b|[,;:]\s*si\b|\bsi es\b|\bhasta que\b|visto bueno|autoriz/i.test(texto.trim())
 }
 
 /**
@@ -402,10 +415,12 @@ export function citaNegada(cita: string, textoElemento: string): boolean {
 export function defectoDelElemento(
   c: Record<string, unknown> | undefined,
   admiteEscalar: boolean,
-  // Catálogo: sólo los elementos con `partes` exigen "completo" (booleano).
   // v3.5: antes se exigía en todos y el modelo trataba como obligatorio cada
   // detalle del texto del elemento (falsos «parcial» en DEV, 2026-11-20).
-  exigeCompleto = false
+  // Catálogo: sólo los elementos con `partes` exigen "completo" (booleano).
+  exigeCompleto = false,
+  // Catálogo: el elemento ya trae la condición; «condicionada» no aplica.
+  admiteCondicion = false
 ): DefectoElemento | null {
   if (!c || typeof c.hace !== 'boolean') return 'sin_respuesta'
   if (exigeCompleto && typeof c.completo !== 'boolean') return 'sin_respuesta'
@@ -414,7 +429,7 @@ export function defectoDelElemento(
   if (c.generica === true) return 'generica'
   if (c.solo_lo_suyo === true) return 'solo_lo_suyo'
   if (c.delega === true && !admiteEscalar) return 'delega'
-  if (c.condicionada === true) return 'condicionada'
+  if (c.condicionada === true && !admiteCondicion) return 'condicionada'
   return null
 }
 
@@ -898,7 +913,8 @@ export async function gradeConRubrica(opts: {
           defecto: opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
             c,
             elementoAdmiteEscalar(e.texto, opts.perspectiva),
-            opts.perspectiva === 'puesto' && !!partesDe(e.id)?.length
+            opts.perspectiva === 'puesto' && !!partesDe(e.id)?.length,
+            opts.perspectiva === 'puesto' && elementoTraeCondicion(e.texto)
           ),
           motivo: c?.motivo ?? null,
         }))
