@@ -100,6 +100,8 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
           {
             id: 'registra',
             texto: 'Anota a la pareja en la lista de espera con nombre y un dato de contacto (o cómo les avisará)',
+            // v2.3: el elemento existe para esos datos; «la anoto» sin ellos no basta.
+            partes: ['el nombre', 'un dato de contacto o cómo les avisará'],
           },
         ],
         minimoCorrecta: 4,
@@ -568,6 +570,8 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
           {
             id: 'registro',
             texto: 'Los anota en la libreta de objetos olvidados (qué, en qué mesa, a qué hora y quién lo encontró)',
+            // v2.3: son los datos del registro, no opciones (revisión Codex r4).
+            partes: ['qué objetos son', 'en qué mesa estaban', 'a qué hora', 'quién los encontró'],
           },
           {
             id: 'verifica',

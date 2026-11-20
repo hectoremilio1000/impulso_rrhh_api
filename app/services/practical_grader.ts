@@ -40,9 +40,12 @@ const RUBRICA_POR_BANCO = {
 
 /** Práctico por rúbrica del puesto (catálogo 2026-11-16): todos los puestos. */
 export const PRACTICAL_GRADING_VERSION_CATALOGO = {
-  // v3.4 (2026-11-19, ronda 4): perspectiva del puesto, partes obligatorias
+  // v3.7 (2026-11-20): una cita que niega la acción no la acredita.
+  // v3.6 (2026-11-20): ids del modelo con acento o eñe se reconocen.
+  // v3.5 (2026-11-20, DEV): «completo» sólo con partes explícitas de la ficha;
+  // alternativas válidas en la confirmación. v3.4 (2026-11-19, ronda 4): perspectiva del puesto, partes obligatorias
   // completas, citas literales y recuperación de citas reformuladas.
-  grader: 'practico-rubrica-v3.4',
+  grader: 'practico-rubrica-v3.7',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 
@@ -184,7 +187,7 @@ export async function gradePracticalExam(
         // Piloto: sin aprobado/no aprobado; revisión humana por respuesta
         // crítica o por conocimiento indispensable sin comprobar.
         decisionPolicy: 'piloto-sin-decision-v1',
-        perspectiva: 'puesto-v2',
+        perspectiva: 'puesto-v3',
       },
       passThreshold: ficha.practico.umbralAprobado,
       sinDecisionAutomatica: true,
