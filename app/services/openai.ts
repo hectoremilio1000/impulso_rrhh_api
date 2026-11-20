@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
-import { costoUsd, presupuestoDelEntorno, tokensEntradaMax } from '#services/model_budget'
+import { controlDelEntorno, costoUsd, tokensEntradaMax } from '#services/model_budget'
+import { etapaDePrompt } from '#services/model_budget_ledger'
 import type { RegistroLlamada } from '#services/model_budget'
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
@@ -12,7 +13,7 @@ function getClient(): OpenAI | null {
   // intento pasa por su propia reserva del presupuesto.
   return new OpenAI({
     apiKey: OPENAI_API_KEY,
-    ...(process.env.PRESUPUESTO_USD ? { maxRetries: 0 } : {}),
+    ...(process.env.PRESUPUESTO_USD || process.env.PRESUPUESTO_ID ? { maxRetries: 0 } : {}),
   })
 }
 
@@ -42,7 +43,7 @@ export function esErrorDeConexion(err: unknown): boolean {
 
 export async function gradeExamJson(
   prompt: string,
-  opts?: { model?: string; maxTokens?: number; onMeta?: (meta: RegistroLlamada) => void }
+  opts?: { model?: string; maxTokens?: number; onMeta?: (meta: RegistroLlamada) => void; etapa?: string }
 ) {
   const client = getClient()
   if (!client) return { note: 'OPENAI_API_KEY no configurada' }
@@ -51,11 +52,15 @@ export async function gradeExamJson(
   // esta llamada o se detiene ANTES de enviarla.
   const modeloPedido = opts?.model || GPT_MODEL
   const maxTokens = opts?.maxTokens ?? MAX_TOKENS_SALIDA
-  const presupuesto = presupuestoDelEntorno()
+  const presupuesto = await controlDelEntorno()
+  const etapa = etapaDePrompt(prompt, opts?.etapa)
   const reserva = presupuesto
-    ? presupuesto.reservar(costoUsd(presupuesto.precios, tokensEntradaMax(prompt) + 30, maxTokens))
+    ? await presupuesto.reservar(costoUsd(presupuesto.precios, tokensEntradaMax(prompt) + 30, maxTokens), etapa)
     : 0
   let registro: RegistroLlamada | null = null
+  // Error HTTP del proveedor (429, 403, 400…): la petición no se procesó y no
+  // se cobra. Sin respuesta (red, tiempo agotado): no se sabe; cuenta el máximo.
+  let sinCobro = false
 
   // response_format json_object: obliga al modelo a devolver JSON parseable.
   // Sin esto veníamos dependiendo de stripJsonFences + JSON.parse a ciegas.
@@ -99,8 +104,11 @@ export async function gradeExamJson(
         : 0,
     }
     opts?.onMeta?.(registro)
+  } catch (err) {
+    sinCobro = typeof (err as { status?: unknown })?.status === 'number'
+    throw err
   } finally {
-    presupuesto?.liberar(reserva, registro)
+    await presupuesto?.liberar(reserva, registro, sinCobro)
   }
 
   const txt = resp.choices?.[0]?.message?.content?.trim() || '{}'
