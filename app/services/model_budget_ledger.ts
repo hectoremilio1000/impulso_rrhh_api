@@ -1,5 +1,5 @@
 import { hostname } from 'node:os'
-import { createPool, type Pool, type PoolConnection } from 'mysql2/promise'
+import { createConnection, type Connection } from 'mysql2/promise'
 import { PresupuestoExcedido, type Precios, type RegistroLlamada } from '#services/model_budget'
 
 // Libro de gasto COMPARTIDO para las pruebas con modelo (auditoría 2026-11-20).
@@ -50,48 +50,57 @@ export const SQL_COMPROMETIDO = `SELECT COALESCE(SUM(CASE WHEN estado IN ('reser
 export type Reserva = { id: number; maxUsd: number }
 
 export class LibroGasto {
-  private pool: Pool
   constructor(
-    url: string,
+    private readonly url: string,
     readonly presupuestoId: string,
     readonly precios: Precios,
     readonly origen = `${hostname()}:${process.pid}`
-  ) {
-    this.pool = createPool({ uri: url, connectionLimit: 4, decimalNumbers: true })
+  ) {}
+
+  // Una conexión corta por operación: un pool abierto mantenía vivo el
+  // proceso al terminar (los comandos de prueba no salían; cierre 2026-11-20).
+  private async con<T>(fn: (cx: Connection) => Promise<T>): Promise<T> {
+    const cx = await createConnection({ uri: this.url, decimalNumbers: true })
+    try {
+      return await fn(cx)
+    } finally {
+      await cx.end().catch(() => cx.destroy())
+    }
   }
 
   async comprometidoUsd(): Promise<number> {
-    const [rows] = await this.pool.query(SQL_COMPROMETIDO, [this.presupuestoId])
-    return Number((rows as any[])[0]?.usd ?? 0)
+    return this.con(async (cx) => {
+      const [rows] = await cx.query(SQL_COMPROMETIDO, [this.presupuestoId])
+      return Number((rows as any[])[0]?.usd ?? 0)
+    })
   }
 
   /** Reserva el máximo de una llamada o lanza PresupuestoExcedido sin enviarla. */
   async reservar(maxUsd: number, etapa: string | null): Promise<Reserva> {
-    const cx: PoolConnection = await this.pool.getConnection()
-    try {
-      await cx.beginTransaction()
-      const [p] = await cx.query('SELECT limite_usd FROM presupuestos WHERE id = ? FOR UPDATE', [this.presupuestoId])
-      const limite = (p as any[])[0]?.limite_usd
-      if (limite === undefined) throw new PresupuestoExcedido(`PRESUPUESTO: no existe el presupuesto «${this.presupuestoId}» en el libro; no se envía nada.`)
-      const [c] = await cx.query(SQL_COMPROMETIDO, [this.presupuestoId])
-      const comprometido = Number((c as any[])[0]?.usd ?? 0)
-      if (comprometido + maxUsd > Number(limite)) {
-        throw new PresupuestoExcedido(
-          `PRESUPUESTO: se detiene antes de enviar. Comprometido $${comprometido.toFixed(4)} (cerrado + reservado de todos los procesos) + esta llamada hasta $${maxUsd.toFixed(4)} > tope $${Number(limite).toFixed(2)}`
+    return this.con(async (cx) => {
+      try {
+        await cx.beginTransaction()
+        const [p] = await cx.query('SELECT limite_usd FROM presupuestos WHERE id = ? FOR UPDATE', [this.presupuestoId])
+        const limite = (p as any[])[0]?.limite_usd
+        if (limite === undefined) throw new PresupuestoExcedido(`PRESUPUESTO: no existe el presupuesto «${this.presupuestoId}» en el libro; no se envía nada.`)
+        const [c] = await cx.query(SQL_COMPROMETIDO, [this.presupuestoId])
+        const comprometido = Number((c as any[])[0]?.usd ?? 0)
+        if (comprometido + maxUsd > Number(limite)) {
+          throw new PresupuestoExcedido(
+            `PRESUPUESTO: se detiene antes de enviar. Comprometido $${comprometido.toFixed(4)} (cerrado + reservado de todos los procesos) + esta llamada hasta $${maxUsd.toFixed(4)} > tope $${Number(limite).toFixed(2)}`
+          )
+        }
+        const [ins] = await cx.query(
+          `INSERT INTO llamadas (presupuesto_id, estado, max_usd, etapa, origen) VALUES (?, 'reservada', ?, ?, ?)`,
+          [this.presupuestoId, maxUsd, etapa, this.origen]
         )
+        await cx.commit()
+        return { id: Number((ins as any).insertId), maxUsd }
+      } catch (e) {
+        await cx.rollback().catch(() => {})
+        throw e
       }
-      const [ins] = await cx.query(
-        `INSERT INTO llamadas (presupuesto_id, estado, max_usd, etapa, origen) VALUES (?, 'reservada', ?, ?, ?)`,
-        [this.presupuestoId, maxUsd, etapa, this.origen]
-      )
-      await cx.commit()
-      return { id: Number((ins as any).insertId), maxUsd }
-    } catch (e) {
-      await cx.rollback().catch(() => {})
-      throw e
-    } finally {
-      cx.release()
-    }
+    })
   }
 
   /**
@@ -100,21 +109,22 @@ export class LibroGasto {
    * sabe), se cierra al máximo reservado: nunca se subestima.
    */
   async liberar(r: Reserva, registro: RegistroLlamada | null, sinCobro = false) {
-    if (registro) {
-      await this.pool.query(
-        `UPDATE llamadas SET estado='cerrada', costo_usd=?, tokens_entrada=?, tokens_salida=?, modelo=?, fingerprint=?, cerrada_at=CURRENT_TIMESTAMP(3) WHERE id=?`,
-        [registro.costoUsd, registro.tokensEntrada, registro.tokensSalida, registro.modeloRespondio, registro.systemFingerprint, r.id]
-      )
-    } else if (sinCobro) {
-      await this.pool.query(`UPDATE llamadas SET estado='sin_cobro', costo_usd=0, cerrada_at=CURRENT_TIMESTAMP(3) WHERE id=?`, [r.id])
-    } else {
-      await this.pool.query(`UPDATE llamadas SET estado='incierta', costo_usd=max_usd, cerrada_at=CURRENT_TIMESTAMP(3) WHERE id=?`, [r.id])
-    }
+    await this.con(async (cx) => {
+      if (registro) {
+        await cx.query(
+          `UPDATE llamadas SET estado='cerrada', costo_usd=?, tokens_entrada=?, tokens_salida=?, modelo=?, fingerprint=?, cerrada_at=CURRENT_TIMESTAMP(3) WHERE id=?`,
+          [registro.costoUsd, registro.tokensEntrada, registro.tokensSalida, registro.modeloRespondio, registro.systemFingerprint, r.id]
+        )
+      } else if (sinCobro) {
+        await cx.query(`UPDATE llamadas SET estado='sin_cobro', costo_usd=0, cerrada_at=CURRENT_TIMESTAMP(3) WHERE id=?`, [r.id])
+      } else {
+        await cx.query(`UPDATE llamadas SET estado='incierta', costo_usd=max_usd, cerrada_at=CURRENT_TIMESTAMP(3) WHERE id=?`, [r.id])
+      }
+    })
   }
 
-  async cerrar() {
-    await this.pool.end()
-  }
+  /** Compatibilidad: ya no hay conexiones abiertas que cerrar. */
+  async cerrar() {}
 }
 
 /**
