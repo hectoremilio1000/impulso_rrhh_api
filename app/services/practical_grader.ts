@@ -55,7 +55,9 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // completas, citas literales y recuperación de citas reformuladas.
   // v3.11 (2026-11-23, VERIFICACION_V24): frontera alternativa/actualiza en
   // Hostess P3 y control de recepción en Encargado P3 (ficha, no código).
-  grader: 'practico-rubrica-v3.11',
+  // v3.12 (2026-11-23, cierre): cita sin tramo literal se ancla a su oración
+  // (Gerente C6 P13); error crítico «prueba con flama» en Encargado P8.
+  grader: 'practico-rubrica-v3.12',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 

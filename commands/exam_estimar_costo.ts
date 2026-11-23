@@ -95,6 +95,7 @@ export default class ExamEstimarCosto extends BaseCommand {
             frases: [...prompt.matchAll(/- n (\d+)/g)].map((m) => ({ n: Number(m[1]), clase: 'relato', fuerza: 'fuerte', senal: 's' })),
           }
         case 'competencias:autoconciencia':
+        case 'competencias:senal_baja':
           return { citas: [] }
         case 'competencias:confirmar_citas': {
           // Primera confirmación inválida → reintento (peor caso).

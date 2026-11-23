@@ -72,3 +72,37 @@ export function fragmentoLiteral(cita: string, respuesta: string): string | null
   if (negCita !== negResp) return null
   return respuesta.slice(r[mejor.a].i, r[mejor.b].j)
 }
+
+/**
+ * Respaldo del catálogo práctico (v3.12, Gerente C6 P13): cuando la cita del
+ * modelo no tiene tramo literal y la recuperación tampoco lo trae, se ancla a
+ * la ORACIÓN de la respuesta que contiene al menos el 75 % de sus palabras, si
+ * esa oración es la única que lo hace y su negación coincide. Se devuelve la
+ * oración tal cual la escribió el candidato; el elemento sigue pasando por la
+ * confirmación cerrada sobre ese texto. No depende de tiempos ni de listas de
+ * palabras: mide coincidencia de palabras dentro de una sola oración.
+ */
+export function oracionQueContiene(cita: string, respuesta: string): string | null {
+  const c = [...new Set(tokens(cita).map((x) => x.t))]
+  if (c.length < 3) return null
+  const oraciones: { a: number; b: number }[] = []
+  let a = 0
+  for (const m of respuesta.matchAll(/[.!?;\n]+/g)) {
+    oraciones.push({ a, b: m.index! })
+    a = m.index! + m[0].length
+  }
+  oraciones.push({ a, b: respuesta.length })
+  const puntuadas = oraciones
+    .map((o) => {
+      const texto = respuesta.slice(o.a, o.b).trim()
+      const ts = new Set(tokens(texto).map((x) => x.t))
+      return { texto, ts, cubre: c.filter((t) => ts.has(t)).length / c.length }
+    })
+    .filter((o) => o.texto)
+    .sort((x, y) => y.cubre - x.cubre)
+  const [mejor, segunda] = puntuadas
+  if (!mejor || mejor.cubre < 0.75 || (segunda && segunda.cubre >= mejor.cubre)) return null
+  const neg = (ts: Iterable<string>) => [...ts].some((t) => NEGACION.has(t))
+  if (neg(c) !== neg(mejor.ts)) return null
+  return mejor.texto
+}

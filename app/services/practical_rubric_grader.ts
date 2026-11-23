@@ -1,5 +1,5 @@
 import { gradeExamJson, GPT_MODEL_ESCALADO } from '#services/openai'
-import { fragmentoLiteral } from '#services/cita_literal'
+import { fragmentoLiteral, oracionQueContiene } from '#services/cita_literal'
 import { citaVerificable } from '#services/psych_axis_grader'
 import {
   DIMENSIONES,
@@ -42,6 +42,8 @@ export type ResultadoPregunta = {
   faltantes: string[]
   errores: { id: string; texto: string; cita: string }[]
   citasNoVerificadas: string[]
+  // v3.12 · Las mismas, con el elemento o error al que se atribuían (para auditar y recalcular).
+  citasNoVerificadasDetalle?: { id: string; cita: string }[]
   // Elementos que el modelo acreditó y la confirmación cerrada rechazó.
   elementosRechazados?: { id: string; cita: string; defecto?: string | null; motivo: string | null }[]
   // Errores críticos que el modelo señaló y la confirmación descartó.
@@ -560,6 +562,11 @@ async function recuperarCitas(
     const lit = porClave.get(clave)
     item.citaPropuesta = String(item.cita)
     if (lit && fragmentoLiteral(lit, respuesta) !== null) item.cita = lit
+    else {
+      // v3.12 · Respaldo: la oración literal que contiene la cita propuesta.
+      const o = oracionQueContiene(String(item.cita), respuesta)
+      if (o) item.cita = o
+    }
   }
 }
 
@@ -605,6 +612,7 @@ export function interpretarPregunta(
 ): Omit<ResultadoPregunta, 'q' | 'evalua' | 'dimension' | 'indispensable' | 'respuesta'> {
   const corpus = [{ qid: `q${p.q}`, pregunta: '', respuesta }]
   const noVerificadas: string[] = []
+  const noVerificadasDetalle: { id: string; cita: string }[] = []
   const verificar = (lista: any[], catalogo: { id: string; texto: string }[]) =>
     (Array.isArray(lista) ? lista : [])
       .filter((x) => x?.presente === true)
@@ -619,7 +627,10 @@ export function interpretarPregunta(
         // no cuenta. Subgerente conserva la verificación anterior.
         const okCita =
           okCat && (literal ? fragmentoLiteral(x.cita, respuesta) !== null : citaEnRespuesta(x.cita, respuesta, corpus))
-        if (okCat && !okCita && x.cita) noVerificadas.push(x.cita)
+        if (okCat && !okCita && x.cita) {
+          noVerificadas.push(x.cita)
+          noVerificadasDetalle.push({ id: x.id, cita: x.cita })
+        }
         return okCita
       })
       .filter((x, i, arr) => arr.findIndex((y) => y.id === x.id) === i)
@@ -658,6 +669,7 @@ export function interpretarPregunta(
     faltantes,
     errores,
     citasNoVerificadas: noVerificadas,
+    ...(noVerificadasDetalle.length ? { citasNoVerificadasDetalle: noVerificadasDetalle } : {}),
   }
 }
 

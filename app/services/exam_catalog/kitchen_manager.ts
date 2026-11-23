@@ -452,6 +452,14 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
             texto:
               'Reabre el gas o reenciende por su propia impresión (cuando ya no percibe el olor o cuando él considera que no hay fuga), sin que un técnico, la compañía de gas o personal autorizado confirme que no hay fuga',
           },
+          // v3.12 (cierre, Encargado C5 P8): buscar la fuga con fuego es una
+          // fuente de ignición en sí misma, distinta de reencender; sin este
+          // error el modelo la pegaba a `reabre_por_su_cuenta`.
+          {
+            id: 'prueba_con_flama',
+            texto:
+              'Busca o comprueba la fuga con una flama, un cerillo, un encendedor o algo que haga chispa (en vez de alejarse y esperar a un técnico o a la compañía de gas)',
+          },
         ],
       },
       {

@@ -140,6 +140,7 @@ export function etapaDePrompt(prompt: string, forzada?: string): string {
   if (prompt.includes('no se extrajo ningún RELATO')) return 'competencias:relatos_omitidos'
   if (prompt.includes('Estas frases del candidato no se evaluaron')) return 'competencias:frases_sin_juzgar'
   if (prompt.startsWith('Preguntas cerradas de autoconciencia')) return 'competencias:autoconciencia'
+  if (prompt.startsWith('Preguntas cerradas sobre señales negativas')) return 'competencias:senal_baja'
   if (prompt.startsWith('Evalúas UNA competencia')) return 'competencias:extraccion'
   if (prompt.startsWith('Preguntas cerradas sobre frases')) return 'competencias:confirmar_citas'
   if (prompt.startsWith('Pregunta cerrada.')) return 'competencias:confirmar_alerta'

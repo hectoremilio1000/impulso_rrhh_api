@@ -1,5 +1,5 @@
 import { test } from '@japa/runner'
-import { fragmentoLiteral } from '#services/cita_literal'
+import { fragmentoLiteral, oracionQueContiene } from '#services/cita_literal'
 import {
   buildPromptConfirmaElementos,
   buildPromptPregunta,
@@ -19,6 +19,8 @@ import {
   consolidar,
   cuentaAlgoHecho,
   sinHechoPropio,
+  aplicarSenalBaja,
+  buildPromptSenalBaja,
   cuentaAccionHecha,
   dividirMixta,
   esCondicional,
@@ -684,5 +686,104 @@ test.group('verificación v2.4 de Codex · D1 veto sin hecho propio (v2.5)', () 
   test('sin marca de hipotética ni de presente no veta: decide la confirmación', ({ assert }) => {
     assert.isFalse(sinHechoPropio('Nunca me ha pasado.'))
     assert.isFalse(sinHechoPropio(''))
+  })
+})
+
+test.group('cierre · competencias v2.6 · «Baja» exige una señal negativa', () => {
+  const ficha = CATALOGO.kitchen_manager
+  const preguntas = ficha.competencias.preguntas
+  const qOpt = preguntas.map((p, i) => ({ p, q: i + 1 })).filter((x) => x.p.eje === 'optimismo_bondadoso')
+  const qExp = qOpt.find((x) => x.p.tipo === 'experiencia')!.q
+  const qHip = qOpt.find((x) => x.p.tipo === 'hipotetica')!.q
+  const rExp = 'Una capacitación de porcionado no funcionó porque hablé demasiado. La próxima vez repetiría la capacitación con práctica.'
+  const rHip = 'Yo repartiría las fallas por corregir y empezaría por las urgentes.'
+  const answers = Object.fromEntries(preguntas.map((p, i) => [`q${i + 1}`, { question: p.texto, answer: i + 1 === qExp ? rExp : i + 1 === qHip ? rHip : '' }]))
+  const porP = (prompt: string) => [...prompt.matchAll(/- n (\d+) · P(\d+)/g)].map((m) => ({ n: Number(m[1]), q: Number(m[2]) }))
+  const fake = (senal: (q: number) => any, prompts: string[] = []) => async (prompt: string) => {
+    prompts.push(prompt)
+    if (prompt.startsWith('Preguntas cerradas sobre señales negativas')) return { citas: porP(prompt).map((x) => ({ n: x.n, ...senal(x.q) })) }
+    if (prompt.includes('Preguntas cerradas sobre frases'))
+      return { citas: porP(prompt).map((x) => ({ n: x.n, accion_propia: true, ya_lo_hizo: x.q === qExp })) }
+    if (prompt.includes('Evalúas UNA competencia') && prompt.includes('hablé demasiado'))
+      return {
+        revisadas: [qExp, qHip],
+        evidencias: [
+          { q: qExp, cita: 'Una capacitación de porcionado no funcionó porque hablé demasiado', clase: 'relato', fuerza: 'debil', senal: 'x' },
+          { q: qHip, cita: 'Yo repartiría las fallas por corregir y empezaría por las urgentes', clase: 'criterio', fuerza: 'debil', senal: 'x' },
+        ],
+        alerta: { presente: false },
+      }
+    return { evidencias: [], revisadas: [], alerta: { presente: false } }
+  }
+  const eje = async (llm: any) =>
+    (await gradeCompetencias({ ficha, answers, version: {}, llm })).aiReport.competencias.find((c: any) => c.eje === 'optimismo_bondadoso')!
+
+  test('KM C3: la falla que cuenta es la situación y el plan es débil sin señal baja → Media, no «Baja»', async ({ assert }) => {
+    const prompts: string[] = []
+    const c = await eje(fake((q) => (q === qExp ? { pertinente: false, senal_baja: false } : { pertinente: true, senal_baja: false }), prompts))
+    assert.isTrue(prompts.some((p) => p.startsWith('Preguntas cerradas sobre señales negativas')))
+    assert.equal(c.nivel, 2)
+    assert.equal(c.tipoEvidencia, 'solo_criterio_declarado')
+    const sit = c.evidencias.find((e: any) => e.q === qExp)!
+    assert.isFalse(sit.pertinente) // queda a la vista, no cuenta para el nivel
+  })
+
+  test('con una señal baja confirmada el nivel sí es «Baja»', async ({ assert }) => {
+    const c = await eje(fake(() => ({ pertinente: true, senal_baja: true })))
+    assert.equal(c.nivel, 1)
+    assert.isTrue(c.evidencias.some((e: any) => e.senalBaja === true))
+  })
+
+  test('sin respuesta válida: «Por verificar», nunca «Baja» sin evidencia', async ({ assert }) => {
+    const c = await eje(fake(() => ({})))
+    assert.isNull(c.nivel)
+    assert.isTrue(c.faltaVerificar.some((f: string) => /no «Baja»/.test(f)))
+  })
+
+  test('un eje que no queda en «Baja» no hace la pregunta nueva', async ({ assert }) => {
+    const prompts: string[] = []
+    const llm = async (prompt: string) => {
+      prompts.push(prompt)
+      if (prompt.includes('Preguntas cerradas sobre frases')) return { citas: porP(prompt).map((x) => ({ n: x.n, accion_propia: true, ya_lo_hizo: x.q === qExp })) }
+      if (prompt.includes('Evalúas UNA competencia') && prompt.includes('hablé demasiado'))
+        return { revisadas: [qExp, qHip], evidencias: [{ q: qExp, cita: 'Una capacitación de porcionado no funcionó porque hablé demasiado', clase: 'relato', fuerza: 'suficiente', senal: 'x' }], alerta: { presente: false } }
+      return { evidencias: [], revisadas: [], alerta: { presente: false } }
+    }
+    await gradeCompetencias({ ficha, answers, version: {}, llm })
+    assert.isFalse(prompts.some((p) => p.startsWith('Preguntas cerradas sobre señales negativas')))
+  })
+
+  test('aplicarSenalBaja: no pertinente sale del nivel; débil sin señal baja cuenta como Media', ({ assert }) => {
+    const ev = [
+      { q: 1, cita: 'a', clase: 'relato' as const, fuerza: 'debil' as const, senal: '', confirmada: true },
+      { q: 2, cita: 'b', clase: 'criterio' as const, fuerza: 'debil' as const, senal: '', confirmada: true },
+      { q: 3, cita: 'c', clase: 'relato' as const, fuerza: 'debil' as const, senal: '', confirmada: true },
+    ]
+    const porN = new Map<number, any>([[0, { pertinente: false, senal_baja: false }], [1, { pertinente: true, senal_baja: false }], [2, { pertinente: true }]])
+    const r = aplicarSenalBaja(ev, porN, [0, 1, 2])
+    assert.isFalse(r.evidencias[0].pertinente)
+    assert.equal(r.evidencias[1].fuerza, 'suficiente')
+    assert.deepEqual(r.sinConfirmar, [3])
+    assert.include(buildPromptSenalBaja('optimismo_bondadoso', [{ i: 0, q: 1, pregunta: 'p', respuesta: 'r', cita: 'c' }]), 'SEÑALES BAJAS')
+  })
+})
+
+test.group('cierre · práctico v3.12', () => {
+  const R13 = 'Además de repetir el conteo y conciliar compras, traspasos, mermas y POS, hago una prueba controlada de porcionado con agua y medidor antes del siguiente turno. Eso ayuda a separar error de técnica de error de registro sin acusar a nadie.'
+  test('GM C6 P13: una cita reformulada se ancla a la oración literal que la contiene', ({ assert }) => {
+    assert.isNull(fragmentoLiteral('repito el conteo y concilio compras, traspasos, mermas y POS', R13))
+    assert.equal(
+      oracionQueContiene('repito el conteo y concilio compras, traspasos, mermas y POS', R13),
+      'Además de repetir el conteo y conciliar compras, traspasos, mermas y POS, hago una prueba controlada de porcionado con agua y medidor antes del siguiente turno'
+    )
+  })
+  test('no ancla si cambia la negación, si cubre poco o si dos oraciones empatan', ({ assert }) => {
+    assert.isNull(oracionQueContiene('no repito el conteo y concilio compras', R13))
+    assert.isNull(oracionQueContiene('reviso las cortesías y las botellas rotas sin registro', R13))
+    assert.isNull(oracionQueContiene('cuento las botellas', 'Cuento las botellas. Cuento las botellas.'))
+  })
+  test('Encargado P8 tiene el error crítico «prueba con flama»', ({ assert }) => {
+    const p8 = CATALOGO.kitchen_manager.practico.preguntas.find((p: any) => p.q === 8) as any
+    assert.isTrue(p8.erroresCriticos.some((e: any) => e.id === 'prueba_con_flama'))
   })
 })
