@@ -859,4 +859,16 @@ test.group('cierre · práctico v3.14 · partes obligatorias con evidencia', () 
     assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'x', partes: [{ n: 1, presente: true, cita: 'lo reconozco' }, { n: 2, presente: true, cita: 'lo documento en la bitácora' }] }] }, 'x', partes, 'Yo lo reconozco.'), [2])
     assert.deepEqual(partesSinEvidencia(null, 'x', partes, 'Yo lo reconozco.'), [1, 2])
   })
+
+  test('v3.15: una parte dicha con otras palabras y citada reformulada cuenta (H C7 P1)', ({ assert }) => {
+    const resp = 'recibo a los ramírez y los paso a su mesa de 4 a la pareja le explico que calculamos unos 20 minutos para una de 2 si acepta anoto nombre y contacto y actualizo la espera'
+    const v = { elementos: [{ id: 'registra', partes: [{ n: 1, presente: true, cita: 'anoto su nombre' }, { n: 2, presente: true, cita: 'anoto nombre y contacto' }] }] }
+    assert.deepEqual(partesSinEvidencia(v, 'registra', ['el nombre', 'un dato de contacto'], resp), [])
+  })
+
+  test('v3.15: el reporte guarda la respuesta por parte', async ({ assert }) => {
+    const { q } = await correr(C3, (n) => (n === 1 ? { presente: true, cita: 'Yo di los $4,500 sin registrar motivo y lo reconozco' } : { presente: false, cita: '' }))
+    const pc = (q as any).partesConfirmadas.find((x: any) => x.id === 'propia')
+    assert.deepEqual(pc.partes.map((x: any) => x.presente), [true, false])
+  })
 })

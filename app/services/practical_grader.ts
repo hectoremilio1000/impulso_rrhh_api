@@ -60,7 +60,9 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // v3.13 (cierre): partes obligatorias en los elementos compuestos de Gerente P9.
   // v3.14 (cierre, VERIFICACION_FINAL_V28 B1): cada parte obligatoria de un
   // elemento acreditado necesita su propio fragmento literal.
-  grader: 'practico-rubrica-v3.14',
+  // v3.15: esa pregunta usa la misma tolerancia de redacción que la confirmación,
+  // la cita de cada parte puede anclarse a su oración y se guarda cada respuesta.
+  grader: 'practico-rubrica-v3.15',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 
