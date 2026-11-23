@@ -88,7 +88,11 @@ test.group('ronda 4 · práctico (defectos 1, 2 y 5)', () => {
         p.esenciales.filter((e) => e.partes?.length).map((e) => `${code}:${p.q}:${e.id}`)
       )
     )
-    assert.deepEqual(conPartes, ['hostess:1:registra', 'hostess:3:lista', 'hostess:12:registro', 'kitchen_manager:1:tortilla', 'kitchen_manager:8:reabre', 'kitchen_manager:12:precio'])
+    // v3.13: los elementos compuestos de Gerente P9 (cierre, Gerente C3 P9).
+    assert.deepEqual(conPartes, [
+      'hostess:1:registra', 'hostess:3:lista', 'hostess:12:registro', 'kitchen_manager:1:tortilla', 'kitchen_manager:8:reabre', 'kitchen_manager:12:precio',
+      'general_manager:9:cancelaciones', 'general_manager:9:cortesias', 'general_manager:9:costo', 'general_manager:9:nomina', 'general_manager:9:propia', 'general_manager:9:hechos',
+    ])
     const h1 = preguntasAbiertas(CATALOGO.hostess).find((p) => p.q === 1)!
     assert.include(buildPromptPregunta('Hostess', h1, 'x', 'x', 'puesto'), '[partes obligatorias: el nombre; un dato de contacto o cómo les avisará]')
   })

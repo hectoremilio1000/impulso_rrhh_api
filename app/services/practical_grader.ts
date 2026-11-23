@@ -57,7 +57,8 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // Hostess P3 y control de recepción en Encargado P3 (ficha, no código).
   // v3.12 (2026-11-23, cierre): cita sin tramo literal se ancla a su oración
   // (Gerente C6 P13); error crítico «prueba con flama» en Encargado P8.
-  grader: 'practico-rubrica-v3.12',
+  // v3.13 (cierre): partes obligatorias en los elementos compuestos de Gerente P9.
+  grader: 'practico-rubrica-v3.13',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 
