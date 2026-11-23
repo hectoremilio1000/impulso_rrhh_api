@@ -718,26 +718,36 @@ test.group('cierre · competencias v2.6 · «Baja» exige una señal negativa', 
   const eje = async (llm: any) =>
     (await gradeCompetencias({ ficha, answers, version: {}, llm })).aiReport.competencias.find((c: any) => c.eje === 'optimismo_bondadoso')!
 
-  test('KM C3: la falla que cuenta es la situación y el plan es débil sin señal baja → Media, no «Baja»', async ({ assert }) => {
+  test('KM C3: la falla es la situación y el plan cumple la rúbrica MEDIA → Media, no «Baja»', async ({ assert }) => {
     const prompts: string[] = []
-    const c = await eje(fake((q) => (q === qExp ? { pertinente: false, senal_baja: false } : { pertinente: true, senal_baja: false }), prompts))
-    assert.isTrue(prompts.some((p) => p.startsWith('Preguntas cerradas sobre señales negativas')))
+    const c = await eje(fake((q) => (q === qExp ? { pertinente: false, senal_baja: false, cumple_media: false } : { pertinente: true, senal_baja: false, cumple_media: true }), prompts))
+    const p = prompts.find((x) => x.startsWith('Preguntas cerradas sobre señales negativas'))!
+    assert.include(p, 'SEÑALES MEDIAS O ALTAS')
     assert.equal(c.nivel, 2)
     assert.equal(c.tipoEvidencia, 'solo_criterio_declarado')
-    const sit = c.evidencias.find((e: any) => e.q === qExp)!
-    assert.isFalse(sit.pertinente) // queda a la vista, no cuenta para el nivel
+    assert.isFalse(c.evidencias.find((e: any) => e.q === qExp)!.pertinente) // a la vista, no cuenta
+  })
+
+  test('v2.7: débil sin señal baja y sin cumplir la rúbrica MEDIA no es Media: «Por verificar»', async ({ assert }) => {
+    const c = await eje(fake(() => ({ pertinente: true, senal_baja: false, cumple_media: false })))
+    assert.isNull(c.nivel)
+    assert.isTrue(c.evidencias.every((e: any) => e.fuerza === 'debil'))
+    assert.isTrue(c.evidencias.filter((e: any) => e.confirmada).every((e: any) => e.insuficiente))
+    assert.isTrue(c.faltaVerificar.some((f: string) => /demasiado débil para «Media»/.test(f)))
   })
 
   test('con una señal baja confirmada el nivel sí es «Baja»', async ({ assert }) => {
-    const c = await eje(fake(() => ({ pertinente: true, senal_baja: true })))
+    const c = await eje(fake(() => ({ pertinente: true, senal_baja: true, cumple_media: false })))
     assert.equal(c.nivel, 1)
     assert.isTrue(c.evidencias.some((e: any) => e.senalBaja === true))
   })
 
-  test('sin respuesta válida: «Por verificar», nunca «Baja» sin evidencia', async ({ assert }) => {
-    const c = await eje(fake(() => ({})))
-    assert.isNull(c.nivel)
-    assert.isTrue(c.faltaVerificar.some((f: string) => /no «Baja»/.test(f)))
+  test('sin respuesta válida o contradictoria: «Por verificar», nunca «Baja» sin evidencia', async ({ assert }) => {
+    for (const r of [{}, { pertinente: false, senal_baja: true, cumple_media: false }]) {
+      const c = await eje(fake(() => r))
+      assert.isNull(c.nivel)
+      assert.isTrue(c.faltaVerificar.some((f: string) => /sin confirmar/.test(f)))
+    }
   })
 
   test('un eje que no queda en «Baja» no hace la pregunta nueva', async ({ assert }) => {
@@ -753,18 +763,23 @@ test.group('cierre · competencias v2.6 · «Baja» exige una señal negativa', 
     assert.isFalse(prompts.some((p) => p.startsWith('Preguntas cerradas sobre señales negativas')))
   })
 
-  test('aplicarSenalBaja: no pertinente sale del nivel; débil sin señal baja cuenta como Media', ({ assert }) => {
-    const ev = [
-      { q: 1, cita: 'a', clase: 'relato' as const, fuerza: 'debil' as const, senal: '', confirmada: true },
-      { q: 2, cita: 'b', clase: 'criterio' as const, fuerza: 'debil' as const, senal: '', confirmada: true },
-      { q: 3, cita: 'c', clase: 'relato' as const, fuerza: 'debil' as const, senal: '', confirmada: true },
-    ]
-    const porN = new Map<number, any>([[0, { pertinente: false, senal_baja: false }], [1, { pertinente: true, senal_baja: false }], [2, { pertinente: true }]])
-    const r = aplicarSenalBaja(ev, porN, [0, 1, 2])
+  test('aplicarSenalBaja: no pertinente sale; Media sólo si cumple la rúbrica; contradicción sin confirmar', ({ assert }) => {
+    const e = (q: number) => ({ q, cita: String(q), clase: 'relato' as const, fuerza: 'debil' as const, senal: '', confirmada: true })
+    const ev = [e(1), e(2), e(3), e(4), e(5)]
+    const porN = new Map<number, any>([
+      [0, { pertinente: false, senal_baja: false, cumple_media: false }],
+      [1, { pertinente: true, senal_baja: false, cumple_media: true }],
+      [2, { pertinente: true, senal_baja: false, cumple_media: false }],
+      [3, { pertinente: false, senal_baja: true, cumple_media: false }],
+      [4, { pertinente: true, senal_baja: false }],
+    ])
+    const r = aplicarSenalBaja(ev, porN, [0, 1, 2, 3, 4])
     assert.isFalse(r.evidencias[0].pertinente)
     assert.equal(r.evidencias[1].fuerza, 'suficiente')
-    assert.deepEqual(r.sinConfirmar, [3])
-    assert.include(buildPromptSenalBaja('optimismo_bondadoso', [{ i: 0, q: 1, pregunta: 'p', respuesta: 'r', cita: 'c' }]), 'SEÑALES BAJAS')
+    assert.isTrue(r.evidencias[2].insuficiente)
+    assert.equal(r.evidencias[2].fuerza, 'debil')
+    assert.deepEqual(r.sinConfirmar, [4, 5])
+    assert.include(buildPromptSenalBaja('optimismo_bondadoso', [{ i: 0, q: 1, pregunta: 'p', respuesta: 'r', cita: 'c' }]), 'cumple_media')
   })
 })
 

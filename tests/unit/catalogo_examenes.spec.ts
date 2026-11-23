@@ -140,7 +140,7 @@ test.group('catálogo — lo que ve el candidato', () => {
         'practico-rubrica-v3.12',
         c
       )
-      assert.equal(psychGradingVersion(c, huellaCompetencias(CATALOGO[c])).grader, 'competencias-evidencia-v2.6', c)
+      assert.equal(psychGradingVersion(c, huellaCompetencias(CATALOGO[c])).grader, 'competencias-evidencia-v2.7', c)
     }
   })
 

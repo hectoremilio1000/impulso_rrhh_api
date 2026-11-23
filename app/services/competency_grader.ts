@@ -42,7 +42,9 @@ export const COMPETENCY_GRADING_VERSION = {
   // mismas instrucciones al modelo que v2.4.
   // v2.6: «Baja» sin alerta exige una señal negativa confirmada (pregunta
   // cerrada sólo en esos ejes); si no, «Por verificar».
-  grader: 'competencias-evidencia-v2.6',
+  // v2.7: «Media» exige cumplir su rúbrica; lo débil sin señal baja ni media es
+  // insuficiente y no cuenta («Por verificar» si no queda otra evidencia).
+  grader: 'competencias-evidencia-v2.7',
   agregacion: 'por-eje-sin-global-v1',
   model: process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO,
 } as const
@@ -68,6 +70,8 @@ export type Evidencia = {
   pertinente?: boolean
   /** v2.6 · true si se confirmó una señal BAJA de las anclas; false si era débil sin ella. */
   senalBaja?: boolean
+  /** v2.7 · true si era débil, sin señal baja y sin cumplir la rúbrica MEDIA: no cuenta para el nivel. */
+  insuficiente?: boolean
 }
 
 export type ResultadoCompetencia = {
@@ -631,6 +635,7 @@ export function buildPromptSenalBaja(
 ) {
   const r = RUBRICAS[eje]
   const bajas = r.anclas[0].senales.map((x) => `  - ${x}`).join('\n')
+  const medias = [...r.anclas[1].senales, ...r.anclas[2].senales].map((x) => `  - ${x}`).join('\n')
   const lista = citas
     .map(
       (c) =>
@@ -642,6 +647,8 @@ export function buildPromptSenalBaja(
 QUÉ MIDE: ${r.queMide}
 SEÑALES BAJAS:
 ${bajas}
+SEÑALES MEDIAS O ALTAS:
+${medias}
 
 ${lista}
 
@@ -652,17 +659,23 @@ Para cada frase, leída dentro de su respuesta completa, contesta true o false:
   "senal_baja": ¿la frase muestra alguna de las SEÑALES BAJAS de arriba?
       Una frase vaga, corta, incompleta o que sólo dice lo que haría bien NO
       es señal baja.
+  "cumple_media": ¿la frase muestra al menos una de las SEÑALES MEDIAS O
+      ALTAS de arriba? Es false si es demasiado vaga o incompleta para
+      cumplir alguna.
 
-Devuelve SOLO: { "citas": [{ "n": 0, "pertinente": true, "senal_baja": false }] }`
+Devuelve SOLO: { "citas": [{ "n": 0, "pertinente": true, "senal_baja": false, "cumple_media": false }] }`
 }
 
 /**
  * Aplica las respuestas cerradas de señal baja (pura). Débil con señal baja se
- * queda débil; débil sin ella cuenta como «suficiente» (Media); no pertinente
- * sale del nivel y queda a la vista. Sin respuesta válida: `sinConfirmar`.
+ * queda débil (Baja). Sin señal baja, cuenta como «suficiente» (Media) SÓLO si
+ * cumple la rúbrica MEDIA; si no, es evidencia insuficiente y no cuenta para
+ * el nivel (v2.7). No pertinente sale del nivel y queda a la vista. Respuesta
+ * inválida o contradictoria (no pertinente con señal baja): `sinConfirmar`.
  */
 export function aplicarSenalBaja(evidencias: Evidencia[], porN: Map<number, any>, revisadas: number[]) {
-  const valida = (c: any) => !!c && typeof c.pertinente === 'boolean' && typeof c.senal_baja === 'boolean'
+  const valida = (c: any) =>
+    !!c && typeof c.pertinente === 'boolean' && typeof c.senal_baja === 'boolean' && typeof c.cumple_media === 'boolean' && !(c.pertinente === false && c.senal_baja === true)
   const sinConfirmar: number[] = []
   const out = evidencias.map((e, i) => {
     if (!revisadas.includes(i)) return e
@@ -673,14 +686,15 @@ export function aplicarSenalBaja(evidencias: Evidencia[], porN: Map<number, any>
     }
     if (c.pertinente === false) return { ...e, pertinente: false }
     if (c.senal_baja === true) return { ...e, pertinente: true, senalBaja: true }
-    return { ...e, pertinente: true, senalBaja: false, fuerza: 'suficiente' as const }
+    if (c.cumple_media === true) return { ...e, pertinente: true, senalBaja: false, fuerza: 'suficiente' as const }
+    return { ...e, pertinente: true, senalBaja: false, insuficiente: true }
   })
   return { evidencias: out, sinConfirmar: [...new Set(sinConfirmar)] }
 }
 
 /** Evidencias que cuentan para el nivel: confirmadas y pertinentes (pura). */
 export function cuentanParaNivel(evidencias: Evidencia[]) {
-  return evidencias.filter((e) => e.confirmada && e.pertinente !== false)
+  return evidencias.filter((e) => e.confirmada && e.pertinente !== false && !e.insuficiente)
 }
 
 /**
@@ -693,15 +707,19 @@ export function nivelConSenalBaja(
   evidencias: Evidencia[],
   sinConfirmar: number[]
 ) {
-  const c = consolidar(preguntas, cuentanParaNivel(evidencias))
-  if (c.nivel !== 1) return c
-  if (cuentanParaNivel(evidencias).some((e) => e.senalBaja === true) && !sinConfirmar.length) return c
-  const qs = sinConfirmar.length ? ` (sin confirmar en P${sinConfirmar.join(', P')})` : ''
-  return {
-    nivel: null,
-    tipoEvidencia: c.tipoEvidencia,
-    faltaVerificar: [`Evidencia débil sin una señal negativa confirmada${qs}: por verificar, no «Baja».`, ...c.faltaVerificar],
+  // Una cita débil sin confirmar no sostiene ningún nivel (falla cerrado).
+  const sinConf = new Set(sinConfirmar)
+  const cuentan = cuentanParaNivel(evidencias).filter((e) => !(e.fuerza === 'debil' && e.senalBaja !== true && sinConf.has(e.q)))
+  const c = consolidar(preguntas, cuentan)
+  const notas: string[] = []
+  if (sinConfirmar.length)
+    notas.push(`Citas débiles sin confirmar si muestran una señal baja o media (P${sinConfirmar.join(', P')}): no cuentan para el nivel; revisarlas a mano.`)
+  if (evidencias.some((e) => e.insuficiente))
+    notas.push('Hay evidencia demasiado débil para «Media» y sin señal negativa: no cuenta para el nivel.')
+  if (c.nivel === 1 && !cuentan.some((e) => e.senalBaja === true)) {
+    return { nivel: null, tipoEvidencia: c.tipoEvidencia, faltaVerificar: ['Evidencia débil sin una señal negativa confirmada: por verificar, no «Baja».', ...notas, ...c.faltaVerificar] }
   }
+  return { ...c, faltaVerificar: [...notas, ...c.faltaVerificar] }
 }
 
 type Llm = (
