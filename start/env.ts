@@ -23,6 +23,9 @@ export default await Env.create(new URL('../', import.meta.url), {
     'silent',
   ] as const),
   TZ: Env.schema.string.optional(), // e.g. "UTC"
+  // Orígenes extra permitidos por CORS, separados por coma (p. ej. el front
+  // del ambiente dev en Railway). Sin definir: sólo la lista fija de cors.ts.
+  CORS_ORIGENES_EXTRA: Env.schema.string.optional(),
 
   /* ---------- DB (MySQL) ---------- */
   DB_CONNECTION: Env.schema.enum(['mysql'] as const),

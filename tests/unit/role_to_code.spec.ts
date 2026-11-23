@@ -19,7 +19,7 @@ import { roleToCode } from '#controllers/public_apply_full_controller'
  *   - Variantes futuras razonables (Sous chef, Chef ejecutivo) → chef_manager
  *     por includes. Si en algún momento esos roles deben mapear distinto,
  *     insertar un check === ANTES del includes(chef).
- *   - Fallback documentado: cadenas desconocidas o vacías → waiter.
+ *   - Cadenas desconocidas o vacías → null (antes waiter en silencio).
  */
 
 test.group('roleToCode mapper público (public_apply_full_controller)', () => {
@@ -47,12 +47,7 @@ test.group('roleToCode mapper público (public_apply_full_controller)', () => {
     assert.equal(roleToCode('CHEF'), 'chef_manager')
   })
 
-  test('Sous chef (variante razonable, hoy capturada por includes) → chef_manager', ({
-    assert,
-  }) => {
-    // Si en el futuro sous chef debe mapear a un roleCode distinto,
-    // agregar `if (v.includes('sous')) return 'sous_chef'` ANTES del
-    // check de chef.
+  test('Sous chef → chef_manager (Subencargado no está en el piloto: examen de antes)', ({ assert }) => {
     assert.equal(roleToCode('Sous chef'), 'chef_manager')
   })
 
@@ -94,11 +89,12 @@ test.group('roleToCode mapper público (public_apply_full_controller)', () => {
     assert.equal(roleToCode('Subgerente'), 'assistant_manager')
   })
 
-  test('Cadena vacía → waiter (fallback documentado)', ({ assert }) => {
-    assert.equal(roleToCode(''), 'waiter')
+  // 2026-10-23 — Sin fallback a waiter: /apply responde 422.
+  test('Cadena vacía → null (falla cerrado)', ({ assert }) => {
+    assert.isNull(roleToCode(''))
   })
 
-  test('Rol desconocido → waiter (fallback documentado)', ({ assert }) => {
-    assert.equal(roleToCode('Algo no estandar'), 'waiter')
+  test('Rol desconocido → null (falla cerrado)', ({ assert }) => {
+    assert.isNull(roleToCode('Algo no estandar'))
   })
 })

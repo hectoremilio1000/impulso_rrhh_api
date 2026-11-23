@@ -1,18 +1,22 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
-import { gradePsychExam } from '#services/psych_exam_grader'
 import PsychTest from '#models/psych_test'
 import Candidate from '#models/candidate'
 import Stage from '#models/stage'
 import Offer from '#models/offer'
 import { setStageTx } from '#services/stage_service'
+import { ROLE_LABEL_ES, resolveRoleCode } from '#services/role_catalog'
+import { submitExam } from '#services/exam_submission'
+import {
+  PUBLIC_DUPLICATE_RESPONSE,
+  PUBLIC_SUBMIT_RESPONSE,
+  publicExamView,
+} from '#services/public_exam_view'
 
-// Lista blanca de puestos en español (espejo del label de ROLE_OPTIONS del frontend).
-// Si agregas un puesto nuevo, debe agregarse aquí Y en roleToCode() de
-// public_apply_full_controller.ts. PR D (role_thresholds en DB) consolidará
-// esta lista en una sola fuente de verdad.
-const VALID_ROLES_ES = ['Mesero', 'Capitán', 'Cocinero', 'Barman', 'Chef gerente', 'Subgerente']
+// La lista de puestos válidos vive en role_catalog (ROLE_LABEL_ES). Sólo
+// salen labels de ahí, así que el texto libre del candidato nunca llega al
+// prompt como nombre de puesto.
 
 // Exportado para test unitario en tests/unit/normalize_psych_role.spec.ts.
 // Mantenerlo co-locado con el único call site (psychSubmit en este
@@ -43,27 +47,11 @@ const VALID_ROLES_ES = ['Mesero', 'Capitán', 'Cocinero', 'Barman', 'Chef gerent
 // "gerente" y "Sub Gerente" también — por eso se evalúa de más específico a
 // más general.
 //
-// DEUDA (sin cambios): siguen coexistiendo roleToCode (apply) y esta función
-// (psych). Refactor label→roleCode unificado pendiente; ver PRIORIDADES.md.
-function stripAccents(s: string): string {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-}
-
+// 2026-10-23 — Las reglas viven en role_catalog (fuente única). Se conserva
+// la firma: label canónico si se reconoce, texto crudo si no.
 export function normalizePsychRole(raw: string): string {
-  const v = stripAccents((raw || '').trim().toLowerCase())
-  if (!v) return ''
-
-  // De más específico a más general — no reordenar sin releer el comentario.
-  if (v.includes('chef')) return 'Chef gerente'
-  if (v.includes('subgerente') || v.includes('sub gerente')) return 'Subgerente'
-  if (v.includes('capit')) return 'Capitán'
-  if (v.includes('barman') || v.includes('bartender') || v.includes('barra')) return 'Barman'
-  if (v.includes('cocin')) return 'Cocinero'
-  if (v.includes('meser')) return 'Mesero'
-
-  // Sin match: se devuelve crudo para que el call site aplique el fallback
-  // y deje el logger.warn correspondiente.
-  return (raw || '').trim()
+  const code = resolveRoleCode(raw)
+  return code ? ROLE_LABEL_ES[code] : (raw || '').trim()
 }
 
 /**
@@ -130,25 +118,7 @@ export default class PublicController {
     if (!test) return response.notFound({ error: 'Link inválido' })
 
     const candidate = await Candidate.findOrFail(test.candidateId)
-    return {
-      ok: true,
-      alreadyTaken: !!test.takenAt,
-      test: {
-        id: test.id,
-        testName: test.testName,
-        assignedAt: test.assignedAt,
-        takenAt: test.takenAt,
-        score: test.score,
-        passed: test.passed,
-        aiReportJson: test.aiReportJson,
-      },
-      candidate: {
-        id: candidate.id,
-        firstName: candidate.firstName,
-        lastName: candidate.lastName,
-        desiredRole: candidate.desiredRole, // ✅
-      },
-    }
+    return publicExamView('psych', test, candidate)
   }
 
   // POST /api/public/psych-tests/:token/submit
@@ -160,54 +130,28 @@ export default class PublicController {
       const test = await PsychTest.query().where('access_token', token).first()
       if (!test) return response.notFound({ error: 'Link inválido' })
 
-      if (test.takenAt) {
-        return response
-          .status(409)
-          .send({ error: 'Esta evaluación ya fue completada', alreadyTaken: true })
-      }
+      if (test.takenAt) return response.status(409).send(PUBLIC_DUPLICATE_RESPONSE)
 
       const answers = request.input('answers')
       if (!answers) return response.badRequest({ error: 'answers es requerido' })
 
-      // Cargar candidato para construir un prompt rol-específico.
-      // Whitelistea desiredRole contra VALID_ROLES_ES — defensa contra prompt
-      // injection si el campo dejara de venir de un Select controlado.
-      // normalizePsychRole canonicaliza las 3 variantes de chef ("Chef",
-      // "Chef gerente", "Chef y Gerente") a "Chef gerente" ANTES del
-      // whitelist — espejo del fix Chef0-BE en el flujo apply.
+      // 2026-10-23 — Reserva atómica, control de puesto y banco, y falla
+      // controlada viven en exam_submission (compartido con el práctico).
       const candidate = await Candidate.findOrFail(test.candidateId)
-      const raw = (candidate.desiredRole || '').trim()
-      const normalized = normalizePsychRole(raw)
-      const role = VALID_ROLES_ES.includes(normalized) ? normalized : 'Mesero'
-      if (raw && !VALID_ROLES_ES.includes(normalized)) {
-        logger.warn(
-          { candidateId: candidate.id, raw },
-          'Unknown desiredRole on psychSubmit, falling back to Mesero'
-        )
-      }
+      const outcome = await submitExam({
+        kind: 'psych',
+        test,
+        candidate,
+        answers,
+        shownRoleCode: request.input('roleCode') ?? null,
+      })
+      if (outcome === 'duplicate') return response.status(409).send(PUBLIC_DUPLICATE_RESPONSE)
 
-      // Guardar respuestas SIEMPRE
-      test.takenAt = DateTime.now()
-      test.answersJson = answers
-
-      // 2026-07-20 — Calificación por eje con rúbrica + evidencia verificada.
-      // Reemplaza el prompt monolítico (los 7 ejes de golpe) que producía ceros
-      // falsos y 50 parejo. Toda la lógica vive en gradePsychExam: elige la vía
-      // por-eje (puestos con tagging) o la legacy con gate de coherencia, arma
-      // el reporte y calcula score/passed. Ver psych_exam_grader.ts.
-      const { aiReport, score, passed } = await gradePsychExam(role, answers, candidate.id)
-
-      test.aiReportJson = aiReport
-      if (score !== null) test.score = score
-      if (passed !== null) test.passed = passed
-
-      await test.save()
-
-      // IMPORTANTE: NO cambiamos etapa aquí.
-      return { ok: true, score, passed, aiReport: test.aiReportJson }
+      // El resultado es para el reclutador, no para el candidato.
+      return PUBLIC_SUBMIT_RESPONSE
     } catch (err: any) {
-      console.log('PublicPsychTestsController.submit error:', err?.message || err)
-      return response.status(500).send({ error: err?.message || 'Error interno' })
+      logger.error({ err: err?.message }, 'PublicController.psychSubmit error')
+      return response.status(500).send({ error: 'No pudimos guardar tus respuestas. Intenta de nuevo.' })
     }
   }
 

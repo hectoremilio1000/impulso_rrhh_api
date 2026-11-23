@@ -54,12 +54,7 @@ test.group('normalizePsychRole — alias chef → "Chef gerente"', () => {
     assert.equal(normalizePsychRole('  Chef  '), 'Chef gerente')
   })
 
-  test('"Sous chef" (variante razonable, hoy capturada por includes) → "Chef gerente"', ({
-    assert,
-  }) => {
-    // Si en el futuro Sous chef debe normalizarse distinto, insertar
-    // un check === ANTES del includes. Misma anatomía que el spec de
-    // roleToCode.
+  test('"Sous chef" → "Chef gerente" (Subencargado no está en el piloto: examen de antes)', ({ assert }) => {
     assert.equal(normalizePsychRole('Sous chef'), 'Chef gerente')
   })
 })

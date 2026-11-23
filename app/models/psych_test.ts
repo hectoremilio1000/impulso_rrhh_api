@@ -1,6 +1,7 @@
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import { DateTime } from 'luxon'
+import type { ReviewLogEntry } from '#services/role_catalog'
 import Candidate from '#models/candidate'
 
 export default class PsychTest extends BaseModel {
@@ -51,6 +52,28 @@ export default class PsychTest extends BaseModel {
     },
   })
   declare aiReportJson: any | null
+
+  @column({ columnName: 'role_code' }) declare roleCode?: string | null
+  // Ver migración add_review_columns_to_tests y role_catalog.
+  @column() declare instrument?: string | null
+  @column({ columnName: 'bank_fingerprint' }) declare bankFingerprint?: string | null
+  @column({ columnName: 'superseded_by_id' }) declare supersededById?: number | null
+  @column({
+    columnName: 'review_log_json',
+    prepare: (v) => (v === null || v === undefined ? null : JSON.stringify(v)),
+    consume: (v) => {
+      if (v === null || v === undefined) return null
+      if (typeof v === 'string') {
+        try {
+          return JSON.parse(v)
+        } catch {
+          return null
+        }
+      }
+      return v
+    },
+  })
+  declare reviewLogJson: ReviewLogEntry[] | null
 
   @column.dateTime({ columnName: 'created_at' }) declare createdAt: DateTime
   @column.dateTime({ columnName: 'updated_at' }) declare updatedAt: DateTime

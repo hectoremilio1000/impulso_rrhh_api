@@ -23,6 +23,17 @@ import { buildPsychPrompt } from '#services/exam_prompts'
 import { rolTieneTagging } from '#services/psych_question_tags'
 import { gradeAllAxes, EJES_EVALUABLES } from '#services/psych_axis_grader'
 import { validatePsychReport, sanitizePsychReport } from '#services/psych_report_validator'
+import { fingerprintAnswers } from '#services/bank_fingerprint'
+import { fichaPorHuella, huellaRubrica } from '#services/exam_catalog/index'
+import { COMPETENCY_GRADING_VERSION, gradeCompetencias } from '#services/competency_grader'
+
+/** Versión según el banco contestado: catálogo (por evidencia) o anterior (por eje). */
+export function psychGradingVersion(roleCode: string, huella: string | null) {
+  const ficha = fichaPorHuella('psych', roleCode, huella)
+  return ficha
+    ? { ...COMPETENCY_GRADING_VERSION, bank: ficha.competencias.version }
+    : PSYCH_GRADING_VERSION
+}
 
 // Modelo por defecto de la calificación por eje. gpt-4o-mini quedó descartado
 // para esta tarea (no diferencia); ver la prueba de parejas del 2026-07-20.
@@ -30,6 +41,18 @@ const MODELO_POR_EJE = process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO
 
 // Umbral de aprobado del psicométrico. Se mantiene el histórico.
 const UMBRAL_APROBADO = 82
+
+// Versión de lo que produce la calificación. Se guarda con cada prueba
+// (evaluationContext) para saber qué reglas generaron cada resultado y no
+// mezclar históricos. Cambiar rúbrica, etiquetado, prompt o modelo = subir la
+// versión correspondiente; nunca recalificar históricos en silencio.
+export const PSYCH_GRADING_VERSION = {
+  grader: 'por-eje-2026-07-22',
+  rubric: 'rubricas-genericas-v1',
+  tagging: 'tagging-v1',
+  model: MODELO_POR_EJE,
+  passThreshold: UMBRAL_APROBADO,
+} as const
 
 export type PsychGradeResult = {
   aiReport: any
@@ -54,7 +77,8 @@ function scoreDesdeEjes(competenciesGuidara: any): number | null {
 export async function gradePsychExam(
   role: string,
   answers: any,
-  candidateId?: number
+  candidateId?: number,
+  roleCode?: string
 ): Promise<PsychGradeResult> {
   if (!process.env.OPENAI_API_KEY) {
     return {
@@ -65,7 +89,19 @@ export async function gradePsychExam(
     }
   }
 
-  // ── Vía nueva: calificación por eje ──────────────────────────────────
+  // ── Catálogo 2026-11-16: seis competencias por evidencia ─────────────
+  const huella = fingerprintAnswers(answers)
+  const ficha = roleCode ? fichaPorHuella('psych', roleCode, huella) : null
+  if (ficha) {
+    const r = await gradeCompetencias({
+      ficha,
+      answers,
+      version: { bank: ficha.competencias.version, bankFingerprint: huella, rubricHash: huellaRubrica(ficha) },
+    })
+    return { aiReport: r.aiReport, score: r.score, passed: r.passed, estrategia: 'por_eje' }
+  }
+
+  // ── Bancos anteriores: calificación por eje ──────────────────────────
   if (rolTieneTagging(role)) {
     const { competenciesGuidara, detalle } = await gradeAllAxes(role, answers, {
       model: MODELO_POR_EJE,
