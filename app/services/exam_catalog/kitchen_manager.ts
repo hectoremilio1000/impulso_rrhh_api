@@ -441,6 +441,14 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
             id: 'sigue',
             texto: 'Mantiene al equipo cocinando en el área con olor a gas',
           },
+          // Cierre de Codex (V2-07−/V2-08−): reabrir porque «ya no huele» o
+          // porque él lo considera es el riesgo real; la ficha ya pedía que lo
+          // confirme un técnico o la compañía, no su impresión.
+          {
+            id: 'reabre_por_su_cuenta',
+            texto:
+              'Reabre el gas o reenciende por su propia impresión (cuando ya no percibe el olor o cuando él considera que no hay fuga), sin que un técnico, la compañía de gas o personal autorizado confirme que no hay fuga',
+          },
         ],
       },
       {
@@ -635,7 +643,13 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
             texto:
               'Pasa al gerente para su autorización lo que rebase $3,000 (por ejemplo, el pedido completo o la compra del evento) y solo autoriza él lo que queda dentro del tope',
           },
-          { id: 'escrito', texto: 'Deja el pedido por escrito' },
+          {
+            id: 'escrito',
+            texto: 'Deja el pedido por escrito',
+            // Cierre de Codex (KM C7/C9 P12): «confirmo cantidades fechas y
+            // recepción» no dice que quede por escrito.
+            requiere: '(escri|anot|regist|bit[aá]cora|formato|hoja|nota\\b|papel|correo|mensaje|whats|sistema|orden de compra|apunt|document|libreta|cuaderno|plataforma|archivo|excel|pdf)',
+          },
         ],
         minimoCorrecta: 4,
         nucleo: ['cantidades'],

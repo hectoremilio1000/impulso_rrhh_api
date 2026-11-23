@@ -387,7 +387,38 @@ export function citaNegada(cita: string, textoElemento: string): boolean {
     .map((c) => c.trim().replace(/^[«"“'¿¡(\s-]+/, ''))
     .filter((c) => /[\p{L}]/u.test(c))
   if (!clausulas.length) return false
-  return clausulas.every((c) => NEGACION.test(c) && !NEGACION_QUE_AFIRMA.test(c) && !NEGACION_CONDICIONAL.test(c))
+  const negada = (c: string) =>
+    NEGACION.test(c) && !NEGACION_QUE_AFIRMA.test(c) && !NEGACION_CONDICIONAL.test(c) && !NO_SIN.test(c)
+  if (clausulas.every(negada)) return true
+  // v3.10 (Codex, cierre): con cláusulas afirmativas y negadas, decide la que
+  // habla de la acción del elemento («No volvería a contar las botellas;
+  // aviso al gerente» niega el conteo). Si ninguna la nombra, no se rechaza.
+  const raices = new Set(raicesDe(textoElemento))
+  const rel = clausulas.map((c) => raicesDe(c).filter((r) => raices.has(r)).length)
+  const max = Math.max(...rel)
+  if (max === 0) return false
+  const top = clausulas.filter((_, i) => rel[i] === max)
+  return top.every(negada)
+}
+
+// «No firmamos diez kilos sin tenerlos» = sólo firma lo que tiene: afirma la
+// acción con su condición (Codex, cierre: KM C6 P3).
+const NO_SIN = /\bsin\b/i
+
+const NO_ES_RAIZ = new Set(['para', 'como', 'esta', 'este', 'esto', 'todo', 'toda', 'todos', 'todas', 'cada', 'pero', 'solo', 'antes', 'desp', 'cuan', 'hast', 'dond', 'porq', 'tamb', 'mism', 'otra', 'otro', 'tien', 'hace', 'algo', 'nada', 'sobr', 'entr', 'desd', 'segu', 'much', 'poco', 'siem', 'nunc'])
+/** Raíces de 4 letras de las palabras con contenido (sin acentos). Pura. */
+function raicesDe(s: string): string[] {
+  return (s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().match(/\p{L}{4,}/gu) ?? [])
+    .map((w) => w.slice(0, 4))
+    .filter((r) => !NO_ES_RAIZ.has(r))
+}
+
+/**
+ * La cita sólo dice para qué («para sacar la reserva»), no la acción del
+ * elemento (Codex, cierre: KM C3 P1). Pura.
+ */
+export function soloFinalidad(cita: string): boolean {
+  return /^(para|a fin de|con el fin de|con tal de)\s/i.test(cita.trim()) && !/[,;:]|\b(y|luego|entonces|ya)\b/i.test(cita)
 }
 
 // «No se reabre hasta que el técnico descarte la fuga» = sólo reabre cuando
@@ -917,7 +948,7 @@ export async function gradeConRubrica(opts: {
         .map(({ e, c }) => ({
           id: e.id,
           cita: e.cita,
-          defecto: opts.perspectiva === 'puesto' && sinAccionClave(e.cita, p.esenciales.find((x) => x.id === e.id) as { texto: string; requiere?: string } | undefined) ? ('sin_accion_clave' as const) : opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
+          defecto: opts.perspectiva === 'puesto' && (soloFinalidad(e.cita) || sinAccionClave(e.cita, p.esenciales.find((x) => x.id === e.id) as { texto: string; requiere?: string } | undefined)) ? ('sin_accion_clave' as const) : opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
             c,
             elementoAdmiteEscalar(e.texto, opts.perspectiva),
             opts.perspectiva === 'puesto' && !!partesDe(e.id)?.length,

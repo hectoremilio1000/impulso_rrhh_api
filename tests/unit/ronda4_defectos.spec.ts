@@ -6,17 +6,24 @@ import {
   citaNegada,
   elementoTraeCondicion,
   sinAccionClave,
+  soloFinalidad,
   idDelCatalogo,
   defectoDelElemento,
   elementoAdmiteEscalar,
   gradeConRubrica,
 } from '#services/practical_rubric_grader'
 import {
+  aplicarAutoconciencia,
   confirmacionValida,
   consolidar,
   cuentaAlgoHecho,
+  cuentaAccionHecha,
+  dividirMixta,
+  esCondicional,
+  frasesSinJuzgar,
   gradeCompetencias,
   leerConfirmaciones,
+  type Evidencia,
 } from '#services/competency_grader'
 import { CATALOGO, enunciadosPractico, preguntasAbiertas } from '#services/exam_catalog/index'
 
@@ -446,7 +453,7 @@ test.group('revisión final de Codex · competencias (B1)', () => {
     assert.isFalse(cuentaAlgoHecho(''))
   })
 
-  test('B1: un relato omitido en una respuesta mixta se recupera y se confirma', async ({ assert }) => {
+  test('B1 (v2.4): una frase en pasado sin citar se juzga y su relato se confirma', async ({ assert }) => {
     const ficha = CATALOGO.general_manager
     const preguntas = ficha.competencias.preguntas
     const q = preguntas.findIndex((p) => p.eje === 'inteligencia_curiosa') + 1
@@ -455,21 +462,162 @@ test.group('revisión final de Codex · competencias (B1)', () => {
     const prompts: string[] = []
     const llm = async (prompt: string) => {
       prompts.push(prompt)
-      if (prompt.includes('no se extrajo ningún RELATO'))
-        return { evidencias: [{ q, cita: 'Fui con permiso a observar cómo cerraban caja en otra sucursal', clase: 'relato', fuerza: 'fuerte', senal: 'busca aprender' }] }
-      if (prompt.includes('Preguntas cerradas sobre frases'))
-        return { citas: [0, 1].map((n) => ({ n, accion_propia: true, ya_lo_hizo: n === 1 })) }
+      if (prompt.includes('Estas frases del candidato no se evaluaron'))
+        return { frases: [{ n: 0, accion_propia: true, ya_lo_hizo: true, fuerza: 'fuerte', senal: 'busca aprender' }] }
+      if (prompt.includes('Preguntas cerradas sobre frases')) {
+        // La frase recuperada no vuelve a la confirmación general.
+        assert.notInclude(prompt, 'FRASE: "Fui con permiso')
+        return { citas: [{ n: 0, accion_propia: true, ya_lo_hizo: false }] }
+      }
       if (prompt.includes('inteligencia') || prompt.includes('Curiosidad') || prompt.includes('curios'))
         return { evidencias: [{ q, cita: 'preguntaría al gerente', clase: 'criterio', fuerza: 'suficiente', senal: 'x' }], revisadas: [q], alerta: { presente: false } }
       return { evidencias: [], revisadas: [], alerta: { presente: false } }
     }
     const r = await gradeCompetencias({ ficha, answers, version: {}, llm })
     const c = r.aiReport.competencias.find((x: any) => x.eje === 'inteligencia_curiosa')!
-    assert.isTrue(prompts.some((p) => p.includes('no se extrajo ningún RELATO')))
+    const p = prompts.find((x) => x.includes('Estas frases del candidato no se evaluaron'))!
+    assert.include(p, 'FRASE: "Fui con permiso a observar cómo cerraban caja en otra sucursal."')
+    assert.notInclude(p, 'FRASE: "Si me pasara hoy')
     const rel = c.evidencias.find((e: any) => e.clase === 'relato')!
     assert.isTrue(rel.recuperada)
-    assert.equal(rel.fuerza, 'fuerte')
+    // Una frase recuperada no llega a «fuerte» sola.
+    assert.equal(rel.fuerza, 'suficiente')
     assert.equal(c.tipoEvidencia, 'conducta_relatada')
-    assert.equal(c.nivel, 3)
+    assert.equal(c.nivel, 2)
+  })
+})
+
+test.group('cierre de Codex · competencias v2.4', () => {
+  test('una cita que mezcla lo hecho con lo que haría se divide (V2-16−, H C7 P12)', ({ assert }) => {
+    assert.deepEqual(
+      dividirMixta(
+        'En septiembre fijé las dos entregas a la misma hora y provoqué una fila. Entendí que yo había calculado mal. Separaría las citas por media hora.'
+      ),
+      ['En septiembre fijé las dos entregas a la misma hora y provoqué una fila. Entendí que yo había calculado mal', 'Separaría las citas por media hora.']
+    )
+    assert.deepEqual(
+      dividirMixta('coordiné con el capitán un relevo la compañera salió despues y nadie quedó sin atención haría lo mismo'),
+      ['coordiné con el capitán un relevo la compañera salió despues y nadie quedó sin atención', 'haría lo mismo']
+    )
+    assert.deepEqual(dividirMixta('Cotejé los recibos y si pasara otra vez compararía los folios'), ['Cotejé los recibos', 'si pasara otra vez compararía los folios'])
+    // Sin pasado, o con el condicional dentro de lo que vio: no se divide.
+    assert.isNull(dividirMixta('Si tuviera otro molde, comprobaría primero su capacidad con agua.'))
+    assert.isNull(dividirMixta('El martes vi que no acabaríamos la capacitación'))
+    assert.isNull(dividirMixta('Lo hablé en privado, la documenté y acordamos cómo llegaría a tiempo'))
+    assert.isNull(dividirMixta('Vi a una señora parada junto al atril y le pregunté si quería sentarse'))
+    assert.isNull(dividirMixta('quedó uniforme y seguimos operando sin levantar una incidencia innecesaria'))
+    assert.isNull(dividirMixta('Cotejé los recibos con la lista de entregas y tramité la corrección'))
+  })
+
+  test('una frase con sólo lo que vio o encontró no es una acción hecha', ({ assert }) => {
+    assert.isFalse(cuentaAccionHecha('Al cerrar encontré una salida de emergencia bloqueada con cajas'))
+    assert.isFalse(cuentaAccionHecha('El martes vi que no acabaríamos la capacitación'))
+    assert.isTrue(cuentaAccionHecha('Pedí reparar la chapa de bodega y revisé al día siguiente'))
+  })
+
+  test('los sustantivos en -ría no son condicional', ({ assert }) => {
+    assert.isTrue(esCondicional('comprobaría'))
+    assert.isTrue(esCondicional('avisaríamos'))
+    assert.isFalse(esCondicional('lavandería'))
+    assert.isFalse(esCondicional('categoría'))
+    assert.isTrue(esCondicional('haria'))
+    assert.isFalse(esCondicional('quería'))
+    assert.isFalse(esCondicional('innecesaria'))
+  })
+
+  test('frases sin juzgar: pasado sin citar en preguntas sin relato; condicional sólo sin ninguna cita', ({ assert }) => {
+    const r = 'Pedí reparar la chapa de bodega y revisé al día siguiente. Probaría yo la reparación antes de darla por recibida.'
+    assert.deepEqual(frasesSinJuzgar(r, [{ cita: 'Probaría yo la reparación antes de darla por recibida', clase: 'criterio' }]), [
+      'Pedí reparar la chapa de bodega y revisé al día siguiente.',
+    ])
+    // Con un relato ya extraído en esa pregunta no se pide nada.
+    assert.deepEqual(frasesSinJuzgar(r, [{ cita: 'Pedí reparar la chapa', clase: 'relato' }]), [])
+    // V2-14−: el criterio que la extracción no citó.
+    assert.deepEqual(frasesSinJuzgar('Si tuviera otro molde, comprobaría primero su capacidad con agua.', []), [
+      'Si tuviera otro molde, comprobaría primero su capacidad con agua.',
+    ])
+    assert.deepEqual(frasesSinJuzgar('Si tuviera otro molde, comprobaría primero su capacidad con agua.', [{ cita: 'x', clase: 'criterio' }]), [])
+    // Todo lo que tiene pasado ya está citado.
+    assert.deepEqual(frasesSinJuzgar('Revisé el corte.', [{ cita: 'Revisé el corte', clase: 'criterio' }]), [])
+  })
+
+  const ev = (q: number, clase: Evidencia['clase'], fuerza: Evidencia['fuerza'], claseModelo: Evidencia['clase'] = clase): Evidencia => ({
+    q, cita: 'x', clase, fuerza, senal: '', claseModelo, confirmada: true,
+  })
+
+  test('autoconciencia: sin algo ya hecho para compensar, un relato no pasa de suficiente (B2)', ({ assert }) => {
+    const evs = [ev(2, 'relato', 'fuerte'), ev(2, 'criterio', 'suficiente'), ev(8, 'relato', 'fuerte'), ev(8, 'relato', 'suficiente')]
+    const porN = new Map<number, any>([
+      [0, { reconoce: true, compensa: false }],
+      [1, { reconoce: false, compensa: false }],
+      [2, { reconoce: true, compensa: false }],
+      [3, { reconoce: true, compensa: true }],
+    ])
+    const r = aplicarAutoconciencia(evs, porN, [0, 1, 2, 3])
+    assert.deepEqual(r.evidencias.map((e) => e.fuerza), ['suficiente', 'suficiente', 'fuerte', 'suficiente'])
+    assert.deepEqual(r.sinConfirmar, [])
+  })
+
+  test('autoconciencia: reconocer un error propio concreto vuelve a relato (V2-15−); sin respuesta válida, falla cerrado', ({ assert }) => {
+    const evs = [ev(6, 'generica', 'suficiente', 'relato'), ev(9, 'relato', 'fuerte')]
+    const r = aplicarAutoconciencia(evs, new Map([[0, { reconoce: true, compensa: false }]]), [0, 1])
+    assert.equal(r.evidencias[0].clase, 'relato')
+    assert.equal(r.evidencias[0].fuerza, 'suficiente')
+    assert.equal(r.evidencias[1].fuerza, 'suficiente')
+    assert.deepEqual(r.sinConfirmar, [9])
+    // Una genérica de origen no se convierte.
+    const g = aplicarAutoconciencia([ev(6, 'generica', 'debil', 'generica')], new Map([[0, { reconoce: true, compensa: true }]]), [0])
+    assert.equal(g.evidencias[0].clase, 'generica')
+  })
+
+  test('pregunta hipotética contestada en presente: es criterio, no relato (GM C3 ética P27)', async ({ assert }) => {
+    const ficha = CATALOGO.general_manager
+    const preguntas = ficha.competencias.preguntas
+    const q = preguntas.findIndex((p) => p.eje === 'etica_trabajo' && p.tipo === 'hipotetica') + 1
+    assert.isAbove(q, 0)
+    const resp = 'Hablo con él en privado y le pongo la amonestación escrita por la tercera tardanza.'
+    const answers = Object.fromEntries(preguntas.map((p, i) => [`q${i + 1}`, { question: p.texto, answer: i + 1 === q ? resp : '' }]))
+    const llm = async (prompt: string) => {
+      if (prompt.includes('Preguntas cerradas sobre frases')) return { citas: [{ n: 0, accion_propia: true, ya_lo_hizo: true }] }
+      if (prompt.startsWith('Evalúas UNA competencia') && prompt.includes(resp))
+        return { evidencias: [{ q, cita: resp, clase: 'criterio', fuerza: 'suficiente', senal: 'x' }], revisadas: [q], alerta: { presente: false } }
+      return { evidencias: [], revisadas: [], alerta: { presente: false } }
+    }
+    const r = await gradeCompetencias({ ficha, answers, version: {}, llm })
+    const c = r.aiReport.competencias.find((x: any) => x.eje === 'etica_trabajo')!
+    assert.equal(c.evidencias[0].clase, 'criterio')
+    assert.equal(c.tipoEvidencia, 'solo_criterio_declarado')
+  })
+})
+
+test.group('cierre de Codex · práctico v3.10', () => {
+  test('la negación se decide en la cláusula de la acción del elemento', ({ assert }) => {
+    // Antes la cláusula «aviso al gerente» salvaba la negación del conteo.
+    assert.isTrue(citaNegada('No volvería a contar las botellas; aviso al gerente', 'Revisa el conteo (vuelve a contar inicial o final)'))
+    // «No X sin Y» afirma X con su condición (KM C6 P3).
+    assert.isFalse(citaNegada('No firmamos diez kilos sin tenerlos', 'Recibe hoy él mismo: pesa todo en la báscula, anota el peso real en la remisión y firma solo lo recibido'))
+    // Si ninguna cláusula nombra la acción, no se rechaza por negación.
+    assert.isFalse(citaNegada('no espero a que se le pase, llamo al 911', 'Activa de inmediato la ayuda médica'))
+    assert.isFalse(citaNegada('No omito el conteo: vuelvo a contar las botellas', 'Revisa el conteo'))
+  })
+
+  test('una cita que sólo dice para qué no acredita la acción (KM C3 P1)', ({ assert }) => {
+    assert.isTrue(soloFinalidad('para sacar la reserva'))
+    assert.isFalse(soloFinalidad('para las 2:00 ya tengo lista la reserva'))
+    assert.isFalse(soloFinalidad('adelanto la reserva para tenerla lista'))
+  })
+
+  test('Encargado P12 «escrito» pide el soporte escrito', ({ assert }) => {
+    const p12 = CATALOGO.kitchen_manager.practico.preguntas.find((p: any) => p.esenciales?.some((e: any) => e.id === 'escrito')) as any
+    const el = p12.esenciales.find((e: any) => e.id === 'escrito')
+    assert.isTrue(sinAccionClave('confirmo cantidades fechas y recepción', el))
+    assert.isFalse(sinAccionClave('dejo el pedido por escrito', el))
+    assert.isFalse(sinAccionClave('lo anoto en la hoja de pedidos', el))
+    assert.isFalse(sinAccionClave('mando la orden de compra por correo', el))
+  })
+
+  test('Encargado P8: reabrir por impresión propia es error crítico de la ficha', ({ assert }) => {
+    const p8 = CATALOGO.kitchen_manager.practico.preguntas.find((p: any) => p.esenciales?.some((e: any) => e.id === 'reabre')) as any
+    assert.include(p8.erroresCriticos.map((e: any) => e.id), 'reabre_por_su_cuenta')
   })
 })

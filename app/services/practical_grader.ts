@@ -40,6 +40,10 @@ const RUBRICA_POR_BANCO = {
 
 /** Práctico por rúbrica del puesto (catálogo 2026-11-16): todos los puestos. */
 export const PRACTICAL_GRADING_VERSION_CATALOGO = {
+  // v3.10 (2026-11-22, cierre de Codex): la negación se decide en la cláusula
+  // de la acción y «no X sin Y» afirma; una cita que sólo dice para qué no
+  // acredita; Encargado P8 reabrir por impresión propia es error crítico;
+  // Encargado P12 «escrito» pide el soporte.
   // v3.9 (2026-11-20, cierre): partes en lista y reabre; acción clave en conteo;
   // con error crítico también se confirman los elementos.
   // v3.8 (2026-11-20, cierre): «no … hasta que …» afirma; un elemento con su
@@ -49,7 +53,7 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // v3.5 (2026-11-20, DEV): «completo» sólo con partes explícitas de la ficha;
   // alternativas válidas en la confirmación. v3.4 (2026-11-19, ronda 4): perspectiva del puesto, partes obligatorias
   // completas, citas literales y recuperación de citas reformuladas.
-  grader: 'practico-rubrica-v3.9',
+  grader: 'practico-rubrica-v3.10',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 
