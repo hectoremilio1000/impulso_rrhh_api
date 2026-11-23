@@ -42,6 +42,15 @@ export type Elemento = {
    */
   partes?: string[]
   /**
+   * v3.17 · Subconjunto de `partes` que son ACCIONES O DATOS ESCRITOS: algo que
+   * el candidato debe decir que hace o anota (documentar, registrar el nombre o
+   * el contacto, avisar al gerente, quién confirma que no hay fuga, una causa
+   * nombrada, una cifra, una fecha). Cada una necesita respaldo literal en la
+   * respuesta. Las partes interpretativas (priorizar, verificar antes de
+   * señalar, separar hechos de hipótesis) las juzga la confirmación general.
+   */
+  partesEscritas?: string[]
+  /**
    * Expresión (sin barras, insensible a mayúsculas) que la cita debe contener
    * para acreditar el elemento. Sólo para acciones de vocabulario inequívoco
    * («conteo»): la decide el código, no el modelo.

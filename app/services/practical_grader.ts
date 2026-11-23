@@ -63,7 +63,9 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // v3.15: esa pregunta usa la misma tolerancia de redacción que la confirmación,
   // la cita de cada parte puede anclarse a su oración y se guarda cada respuesta.
   // v3.16: la cita de una parte que repite la rúbrica no cuenta (código y prompt).
-  grader: 'practico-rubrica-v3.16',
+  // v3.17: la comprobación parte por parte sólo para `partesEscritas` (acciones o
+  // datos escritos); las interpretativas, con la confirmación general.
+  grader: 'practico-rubrica-v3.17',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 

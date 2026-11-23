@@ -120,6 +120,7 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
               'Llama al proveedor de tortilla por una hora real y prepara un plan B (avisar a piso, o comprar con otro proveedor autorizado dentro de lo que puede autorizar o con el visto bueno del gerente)',
             // v2.3 (cierre): «llamo por las tortillas» no dice hora real ni plan B.
             partes: ['pide al proveedor una hora real de entrega', 'un plan B si no llega'],
+            partesEscritas: ['pide al proveedor una hora real de entrega', 'un plan B si no llega'],
           },
           {
             id: 'bitacora',
@@ -428,6 +429,7 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
               'Solo reabre el gas cuando un técnico o la compañía confirman que no hay fuga, y reenciende con procedimiento',
             // v2.3 (cierre): «lo abro cuando yo considero que no hay fuga» no cumple (contraste V2-07−).
             partes: ['quien confirma que no hay fuga es un técnico, la compañía de gas o personal autorizado, no su propia impresión'],
+            partesEscritas: ['quien confirma que no hay fuga es un técnico, la compañía de gas o personal autorizado, no su propia impresión'],
           },
         ],
         minimoCorrecta: 4,
@@ -648,6 +650,7 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
               'Avisa al gerente del aumento con su efecto en el costo del evento y de la carta, y deja la decisión de precio o de proveedor a quien le toca',
             // v2.3 (cierre): elemento compuesto; cotizar o pedir autorización por el tope no basta.
             partes: ['avisa al gerente del aumento', 'el efecto del aumento en el costo (del evento o de la carta)'],
+            partesEscritas: ['avisa al gerente del aumento', 'el efecto del aumento en el costo (del evento o de la carta)'],
           },
           {
             id: 'tope',

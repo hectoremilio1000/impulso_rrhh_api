@@ -886,3 +886,43 @@ test.group('cierre · práctico v3.14 · partes obligatorias con evidencia', () 
     assert.deepEqual(pc.partes.map((x: any) => x.presente), [true, false])
   })
 })
+
+test.group('cierre · práctico v3.17 · partes escritas e interpretativas', () => {
+  const GM = CATALOGO.general_manager
+  const P9 = preguntasAbiertas(GM).find((p) => p.q === 9)!
+  const BANCO = enunciadosPractico(GM)
+
+  test('la ficha separa partes escritas de interpretativas (criterio de rúbrica)', ({ assert }) => {
+    const esc = (['hostess', 'kitchen_manager', 'general_manager'] as const).flatMap((code) =>
+      preguntasAbiertas(CATALOGO[code]).flatMap((p) =>
+        p.esenciales.filter((e) => e.partes?.length).map((e) => `${code}:${p.q}:${e.id}=${(e.partesEscritas ?? []).length}/${e.partes!.length}`)
+      )
+    )
+    assert.deepEqual(esc, [
+      'hostess:1:registra=2/2', 'hostess:3:lista=1/1', 'hostess:12:registro=4/4',
+      'kitchen_manager:1:tortilla=2/2', 'kitchen_manager:8:reabre=1/1', 'kitchen_manager:12:precio=2/2',
+      'general_manager:9:cancelaciones=0/2', 'general_manager:9:cortesias=2/2', 'general_manager:9:costo=1/1',
+      'general_manager:9:nomina=1/1', 'general_manager:9:propia=2/2', 'general_manager:9:hechos=1/2',
+    ])
+    for (const code of ['hostess', 'kitchen_manager', 'general_manager'] as const)
+      for (const p of preguntasAbiertas(CATALOGO[code]))
+        for (const e of p.esenciales) for (const x of e.partesEscritas ?? []) assert.include(e.partes ?? [], x, `${code}:${p.q}:${e.id}`)
+  })
+
+  test('una parte interpretativa no pasa por la comprobación parte por parte (GM C1 «sin acusar»)', async ({ assert }) => {
+    const resp = 'Hoy concilio las 12 cancelaciones por $9,850, ocho del mismo usuario, y arqueos sin acusar.'
+    const prompts: string[] = []
+    const llm = async (prompt: string) => {
+      prompts.push(prompt)
+      if (prompt.startsWith('Comprueba partes obligatorias')) return { elementos: [] }
+      if (prompt.includes('ELEMENTOS ACREDITADOS'))
+        return { elementos: [{ id: 'cancelaciones', completo: true, hace: true, generica: false, solo_lo_suyo: false, delega: false, condicionada: false }] }
+      return { elementos: [{ id: 'cancelaciones', presente: true, cita: 'Hoy concilio las 12 cancelaciones por $9,850, ocho del mismo usuario, y arqueos sin acusar' }], errores: [] }
+    }
+    const answers = Object.fromEntries(BANCO.map((t, i) => [`q${i + 1}`, { question: t, answer: i === 8 ? resp : '' }]))
+    const r = await gradeConRubrica({ rol: 'Gerente', rubrica: [P9], answers, version: {}, passThreshold: 70, preguntasBanco: BANCO, perspectiva: 'puesto', sinDecisionAutomatica: true, llm })
+    const q = r.aiReport.preguntas.find((p: any) => p.q === 9)!
+    assert.include(q.elementos.map((e: any) => e.id), 'cancelaciones')
+    assert.isFalse(prompts.some((p) => p.startsWith('Comprueba partes obligatorias')))
+  })
+})

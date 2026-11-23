@@ -102,6 +102,7 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
             texto: 'Anota a la pareja en la lista de espera con nombre y un dato de contacto (o cómo les avisará)',
             // v2.3: el elemento existe para esos datos; «la anoto» sin ellos no basta.
             partes: ['el nombre', 'un dato de contacto o cómo les avisará'],
+            partesEscritas: ['el nombre', 'un dato de contacto o cómo les avisará'],
           },
         ],
         minimoCorrecta: 4,
@@ -157,6 +158,7 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
             // v2.3 (cierre): Codex acredita con un solo dato (C5: «tomo su contacto»),
             // no «registro que hay un grupo esperando» (contraste V2-01−).
             partes: ['al menos un dato para identificarlos o avisarles: su nombre o un contacto'],
+            partesEscritas: ['al menos un dato para identificarlos o avisarles: su nombre o un contacto'],
             // Cierre v3.10 (H C6 P3): «registro su decisión y contacto» se
             // rechazaba como incompleto teniendo el contacto.
             completoSi: '(nombre|contacto|tel[eé]fono|celular|n[uú]mero de (tel|cel)|whats)',
@@ -582,6 +584,7 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
             texto: 'Los anota en la libreta de objetos olvidados (qué, en qué mesa, a qué hora y quién lo encontró)',
             // v2.3: son los datos del registro, no opciones (revisión Codex r4).
             partes: ['qué objetos son', 'en qué mesa estaban', 'a qué hora', 'quién los encontró'],
+            partesEscritas: ['qué objetos son', 'en qué mesa estaban', 'a qué hora', 'quién los encontró'],
           },
           {
             id: 'verifica',
