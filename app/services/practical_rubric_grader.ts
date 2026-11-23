@@ -430,6 +430,11 @@ const NEGACION_CONDICIONAL = /\bhasta (que|no|tener|haber|confirmar|comprobar)\b
  * «si es de alto valor… hasta que el gerente autorice»): cumplirla bajo esa
  * misma condición no es «condicionada» (DEV: «Si aceptan, anoto nombre…»).
  */
+/** La cita ya dice literalmente la parte obligatoria (`completoSi`). Pura. */
+export function completoPorCita(cita: string, el: { completoSi?: string } | undefined): boolean {
+  return !!el?.completoSi && new RegExp(el.completoSi, 'i').test(cita)
+}
+
 export function sinAccionClave(cita: string, el: { texto: string; requiere?: string } | undefined): boolean {
   return !!el?.requiere && !new RegExp(el.requiere, 'i').test(cita)
 }
@@ -949,7 +954,7 @@ export async function gradeConRubrica(opts: {
           id: e.id,
           cita: e.cita,
           defecto: opts.perspectiva === 'puesto' && (soloFinalidad(e.cita) || sinAccionClave(e.cita, p.esenciales.find((x) => x.id === e.id) as { texto: string; requiere?: string } | undefined)) ? ('sin_accion_clave' as const) : opts.perspectiva === 'puesto' && citaNegada(e.cita, e.texto) ? ('negada' as const) : defectoDelElemento(
-            c,
+            c && completoPorCita(e.cita, p.esenciales.find((x) => x.id === e.id) as { completoSi?: string } | undefined) ? { ...c, completo: true } : c,
             elementoAdmiteEscalar(e.texto, opts.perspectiva),
             opts.perspectiva === 'puesto' && !!partesDe(e.id)?.length,
             opts.perspectiva === 'puesto' && elementoTraeCondicion(e.texto)

@@ -154,6 +154,9 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
             // v2.3 (cierre): Codex acredita con un solo dato (C5: «tomo su contacto»),
             // no «registro que hay un grupo esperando» (contraste V2-01−).
             partes: ['al menos un dato para identificarlos o avisarles: su nombre o un contacto'],
+            // Cierre v3.10 (H C6 P3): «registro su decisión y contacto» se
+            // rechazaba como incompleto teniendo el contacto.
+            completoSi: '(nombre|contacto|tel[eé]fono|celular|n[uú]mero de (tel|cel)|whats)',
           },
           {
             id: 'actualiza',

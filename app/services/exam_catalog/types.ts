@@ -47,6 +47,12 @@ export type Elemento = {
    * («conteo»): la decide el código, no el modelo.
    */
   requiere?: string
+  /**
+   * Expresión que, si la cita la contiene, cumple las `partes` sin depender
+   * del modelo (la parte se puede verificar literalmente: «nombre o
+   * contacto»). Sólo afloja «incompleto»; los demás defectos se revisan igual.
+   */
+  completoSi?: string
 }
 
 export type Dimension = { id: string; nombre: string; peso: number }

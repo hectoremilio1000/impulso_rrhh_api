@@ -652,17 +652,17 @@ export async function gradeCompetencias(opts: {
           for (const c of faltan) if (confirmacionValida(otra.get(c.i))) porN.set(c.i, otra.get(c.i))
         }
         const sinConfirmar = citas.filter((c) => !confirmacionValida(porN.get(c.i))).map((c) => c.q)
-        const tipoDe = new Map(conTexto.map((x) => [x.q, x.p.tipo]))
         r.evidencias = r.evidencias.map((e, i) => {
           const c = porN.get(i)
           const ok = confirmacionValida(c)
           let clase = ok ? claseConfirmada(c, e.clase) : e.clase
-          // v2.4 · A una pregunta hipotética contestada en presente («Hablo con
-          // él…») no se le cree un relato: sin pasado, es lo que haría.
-          // La respuesta completa decide: «Después de una revisión mala junté al
-          // equipo… Priorizamos riesgos…» sí cuenta algo hecho (KM C9 P30).
+          // v2.4 · Sin ningún verbo suyo en pasado en la respuesta no hay
+          // relato: «Hablo con él…» (GM C3 P27, hipotética en presente) o «El
+          // equipo estaba bajoneado… La próxima vez hablaría…» (KM C3 P27) son
+          // lo que haría. Decide la respuesta completa: «junté al equipo…
+          // Priorizamos riesgos…» sí cuenta algo hecho (KM C9 P30).
           const resp = conTexto.find((x) => x.q === e.q)!.respuesta
-          if (clase === 'relato' && tipoDe.get(e.q) === 'hipotetica' && !cuentaAlgoHecho(resp)) clase = 'criterio'
+          if (clase === 'relato' && !cuentaAlgoHecho(resp)) clase = 'criterio'
           // Si la confirmación cambia la clase, la fuerza del primer juicio no
           // se hereda completa: queda como mucho en «suficiente».
           const fuerza: Fuerza = clase !== e.clase && e.fuerza === 'fuerte' ? 'suficiente' : e.fuerza
@@ -673,7 +673,7 @@ export async function gradeCompetencias(opts: {
         r.evidencias.push(
           ...recuperadas.map((e) => {
             const resp = conTexto.find((x) => x.q === e.q)!.respuesta
-            const clase: ClaseEvidencia = e.clase === 'relato' && tipoDe.get(e.q) === 'hipotetica' && !cuentaAlgoHecho(resp) ? 'criterio' : e.clase
+            const clase: ClaseEvidencia = e.clase === 'relato' && !cuentaAlgoHecho(resp) ? 'criterio' : e.clase
             return { ...e, claseModelo: e.clase, clase }
           })
         )

@@ -7,6 +7,7 @@ import {
   elementoTraeCondicion,
   sinAccionClave,
   soloFinalidad,
+  completoPorCita,
   idDelCatalogo,
   defectoDelElemento,
   elementoAdmiteEscalar,
@@ -619,5 +620,35 @@ test.group('cierre de Codex · práctico v3.10', () => {
   test('Encargado P8: reabrir por impresión propia es error crítico de la ficha', ({ assert }) => {
     const p8 = CATALOGO.kitchen_manager.practico.preguntas.find((p: any) => p.esenciales?.some((e: any) => e.id === 'reabre')) as any
     assert.include(p8.erroresCriticos.map((e: any) => e.id), 'reabre_por_su_cuenta')
+  })
+})
+
+test.group('cierre de Codex · v3.10/v2.4, segunda pasada', () => {
+  test('Hostess P3 «lista»: la parte «nombre o contacto» la verifica el código si está literal (H C6 P3)', ({ assert }) => {
+    const p3 = CATALOGO.hostess.practico.preguntas.find((p: any) => p.esenciales?.some((e: any) => e.id === 'lista')) as any
+    const el = p3.esenciales.find((e: any) => e.id === 'lista')
+    assert.isTrue(completoPorCita('registro su decisión y contacto', el))
+    assert.isTrue(completoPorCita('anoto su nombre', el))
+    // V2-01−: sin un dato para identificarlos no se cumple.
+    assert.isFalse(completoPorCita('registro que hay un grupo esperando', el))
+    assert.isFalse(completoPorCita('anoto el número de personas', el))
+  })
+
+  test('sin un verbo suyo en pasado en la respuesta no hay relato (KM C3 P27)', async ({ assert }) => {
+    const ficha = CATALOGO.kitchen_manager
+    const preguntas = ficha.competencias.preguntas
+    const q = preguntas.findIndex((p) => p.eje === 'optimismo_bondadoso') + 1
+    const resp = 'El equipo estaba bajoneado después de una reserva atrasada. La próxima vez hablaría con el equipo para reorganizarnos tras el atraso.'
+    const answers = Object.fromEntries(preguntas.map((p, i) => [`q${i + 1}`, { question: p.texto, answer: i + 1 === q ? resp : '' }]))
+    const llm = async (prompt: string) => {
+      if (prompt.includes('Preguntas cerradas sobre frases')) return { citas: [{ n: 0, accion_propia: true, ya_lo_hizo: true }] }
+      if (prompt.startsWith('Evalúas UNA competencia') && prompt.includes(resp))
+        return { evidencias: [{ q, cita: resp.slice(0, -1), clase: 'criterio', fuerza: 'debil', senal: 'x' }], revisadas: [q], alerta: { presente: false } }
+      return { evidencias: [], revisadas: [], alerta: { presente: false } }
+    }
+    const r = await gradeCompetencias({ ficha, answers, version: {}, llm })
+    const c = r.aiReport.competencias.find((x: any) => x.eje === 'optimismo_bondadoso')!
+    assert.equal(c.evidencias[0].clase, 'criterio')
+    assert.equal(c.tipoEvidencia, 'solo_criterio_declarado')
   })
 })
