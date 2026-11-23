@@ -545,7 +545,9 @@ parte, aunque use otras palabras o la diga de forma breve (por ejemplo «anoto
 nombre» dice «el nombre»; «personal competente» puede ser «personal
 autorizado»). "cita" es el fragmento COPIADO tal cual de la respuesta que la
 dice. Es false sólo si esa parte no aparece en la respuesta; entonces la cita
-va vacía. No cuentes lo que la respuesta no dice.
+va vacía. No cuentes lo que la respuesta no dice. La cita es SIEMPRE texto del
+candidato copiado de la RESPUESTA; nunca copies el texto de la parte ni del
+elemento.
 
 Devuelve SOLO: { "elementos": [{ "id": "<id>", "partes": [{ "n": 1, "presente": true, "cita": "<fragmento exacto>" }] }] }`
 }
@@ -555,7 +557,17 @@ Devuelve SOLO: { "elementos": [{ "id": "<id>", "partes": [{ "n": 1, "presente": 
  * presente === true y una cita con tramo literal en la respuesta. Respuesta
  * ausente o inválida: todas faltan (falla cerrado: no se acredita).
  */
-export function partesSinEvidencia(v: any, id: string, partes: string[], respuesta: string): number[] {
+/**
+ * v3.16 · La cita de una parte debe ser texto del candidato: una cita que
+ * repite la rúbrica (la parte o el elemento) y no es un fragmento literal de
+ * la respuesta no se ancla a ninguna oración ni justifica puntos (Gerente C1 P9). Pura.
+ */
+export function citaDeLaRubrica(cita: string, rubrica: string[], respuesta: string): boolean {
+  if (fragmentoLiteral(cita, respuesta) !== null) return false
+  return rubrica.some((t) => fragmentoLiteral(cita, t) !== null)
+}
+
+export function partesSinEvidencia(v: any, id: string, partes: string[], respuesta: string, texto = ''): number[] {
   const els = Array.isArray(v?.elementos) ? v.elementos.filter((x: any) => String(x?.id) === id) : []
   const lista = els.length === 1 && Array.isArray(els[0].partes) ? els[0].partes : []
   return partes
@@ -565,7 +577,9 @@ export function partesSinEvidencia(v: any, id: string, partes: string[], respues
       if (ps.length !== 1) return true
       const x = ps[0]
       // La cita puede venir reformulada: vale su tramo literal o la oración literal que la contiene.
-      return !(x.presente === true && typeof x.cita === 'string' && x.cita.trim() && (fragmentoLiteral(x.cita, respuesta) !== null || oracionQueContiene(x.cita, respuesta) !== null))
+      if (!(x.presente === true && typeof x.cita === 'string' && x.cita.trim())) return true
+      if (citaDeLaRubrica(x.cita, [...partes, texto].filter(Boolean), respuesta)) return true
+      return !(fragmentoLiteral(x.cita, respuesta) !== null || oracionQueContiene(x.cita, respuesta) !== null)
     })
 }
 
@@ -1040,7 +1054,7 @@ export async function gradeConRubrica(opts: {
             }) }
           })
           for (const e of compuestos) {
-            const faltan = partesSinEvidencia(vp, e.id, e.partes, respuesta)
+            const faltan = partesSinEvidencia(vp, e.id, e.partes, respuesta, e.texto)
             if (faltan.length)
               rechazados.push({
                 id: e.id,

@@ -13,6 +13,7 @@ import {
   elementoAdmiteEscalar,
   gradeConRubrica,
   partesSinEvidencia,
+  citaDeLaRubrica,
 } from '#services/practical_rubric_grader'
 import {
   aplicarAutoconciencia,
@@ -864,6 +865,19 @@ test.group('cierre · práctico v3.14 · partes obligatorias con evidencia', () 
     const resp = 'recibo a los ramírez y los paso a su mesa de 4 a la pareja le explico que calculamos unos 20 minutos para una de 2 si acepta anoto nombre y contacto y actualizo la espera'
     const v = { elementos: [{ id: 'registra', partes: [{ n: 1, presente: true, cita: 'anoto su nombre' }, { n: 2, presente: true, cita: 'anoto nombre y contacto' }] }] }
     assert.deepEqual(partesSinEvidencia(v, 'registra', ['el nombre', 'un dato de contacto'], resp), [])
+  })
+
+  test('v3.16: una cita copiada de la rúbrica no justifica la parte; una cita del candidato sí (GM C1 P9)', ({ assert }) => {
+    const resp = 'Cortesías exceden $8,820; hoy concilio las 12 cancelaciones por $9,850, ocho del mismo usuario, y arqueos sin acusar, reviso costos con cocina.'
+    const partes = ['pone esas cancelaciones entre lo primero a revisar', 'las verificará antes de señalar a alguien']
+    const copia = { elementos: [{ id: 'cancelaciones', partes: [{ n: 1, presente: true, cita: 'hoy concilio las 12 cancelaciones por $9,850, ocho del mismo usuario' }, { n: 2, presente: true, cita: 'las verificará antes de señalar a alguien' }] }] }
+    assert.deepEqual(partesSinEvidencia(copia, 'cancelaciones', partes, resp, 'texto'), [2])
+    const buena = { elementos: [{ id: 'cancelaciones', partes: [{ n: 1, presente: true, cita: 'hoy concilio las 12 cancelaciones por $9,850' }, { n: 2, presente: true, cita: 'y arqueos sin acusar' }] }] }
+    assert.deepEqual(partesSinEvidencia(buena, 'cancelaciones', partes, resp, 'texto'), [])
+    assert.isTrue(citaDeLaRubrica('las verificará antes de señalar a alguien', partes, resp))
+    assert.isFalse(citaDeLaRubrica('y arqueos sin acusar', partes, resp))
+    // Si el candidato escribió las mismas palabras que la rúbrica, es su texto y cuenta.
+    assert.isFalse(citaDeLaRubrica('las verificaré antes de señalar a alguien', partes, 'Pongo las cancelaciones primero y las verificaré antes de señalar a alguien.'))
   })
 
   test('v3.15: el reporte guarda la respuesta por parte', async ({ assert }) => {
