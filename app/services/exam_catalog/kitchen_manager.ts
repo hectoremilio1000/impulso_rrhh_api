@@ -223,8 +223,11 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
           },
           {
             id: 'proceso',
+            // v3.11 (VERIFICACION_V24 D3, KM C6 P3): basta una medida de control;
+            // Codex lo acredita sin capacitación (C1, C5, C6) y no por revisar
+            // remisiones con quien recibió (C3, C4).
             texto:
-              'Fija cómo se recibe en adelante (quién puede recibir, pesar siempre antes de firmar, anotar diferencias) y capacita al cocinero que firmó',
+              'Fija un control de recepción que corrija el sistema, no sólo la entrega de hoy: quién puede recibir, recibir entre dos personas o separar quién pesa de quién coteja la nota, pesar antes de firmar como regla para las entregas siguientes, asentar diferencias, o capacitar al cocinero que firmó. Basta una medida de este tipo; revisar las remisiones anteriores con quien recibió no es fijar el proceso',
           },
           {
             id: 'reclama',

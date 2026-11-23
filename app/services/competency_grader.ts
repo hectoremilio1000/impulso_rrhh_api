@@ -38,7 +38,9 @@ export const COMPETENCY_GRADING_VERSION = {
   // (ancla MEDIA: «acepta la corrección pero no dice qué hizo distinto»).
   // Las tres compuertas son deterministas: donde no aplican, el modelo recibe
   // exactamente las mismas instrucciones que en v2.3.
-  grader: 'competencias-evidencia-v2.4',
+  // v2.5: ese veto exige evidencia en los dos sentidos (sinHechoPropio);
+  // mismas instrucciones al modelo que v2.4.
+  grader: 'competencias-evidencia-v2.5',
   agregacion: 'por-eje-sin-global-v1',
   model: process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO,
 } as const
@@ -394,6 +396,74 @@ export function cuentaAlgoHecho(respuesta: string): boolean {
   return palabrasDe(respuesta).some((x) => esPasado(x.w))
 }
 
+// v2.5 · Veto «sin hecho propio». Sólo veta con evidencia en los dos
+// sentidos: ninguna marca de algo hecho por él y alguna marca de que habla de
+// lo que haría o de lo que hace. La falta de un acento, el plural, el perfecto
+// o el imperfecto no prueban que no ocurrió (VERIFICACION_V24 D1); ante la
+// duda decide la confirmación del modelo. No cambia lo que se manda al modelo:
+// `esPasado` sigue igual.
+const PRETERITO_PROPIO = new Set([
+  'fui', 'hice', 'rehice', 'deshice', 'dije', 'predije', 'contradije', 'tuve', 'obtuve', 'mantuve', 'contuve', 'detuve',
+  'retuve', 'sostuve', 'estuve', 'anduve', 'pude', 'puse', 'propuse', 'dispuse', 'supuse', 'compuse', 'expuse', 'impuse',
+  'repuse', 'pospuse', 'supe', 'cupe', 'quise', 'vine', 'intervine', 'convine', 'previne', 'traje', 'atraje', 'distraje',
+  'extraje', 'conduje', 'reduje', 'produje', 'traduje', 'introduje', 'deduje', 'di', 'vi',
+  'fuimos', 'hicimos', 'dijimos', 'tuvimos', 'obtuvimos', 'mantuvimos', 'detuvimos', 'estuvimos', 'anduvimos', 'pudimos',
+  'pusimos', 'propusimos', 'supimos', 'quisimos', 'vinimos', 'trajimos', 'condujimos', 'redujimos', 'produjimos', 'dimos', 'vimos',
+])
+const AUX_PERFECTO = new Set(['he', 'hemos', 'habia', 'habiamos', 'hube'])
+// «Ayer», «una vez», «el sábado pasado»: un hecho fechado, aunque lo cuente
+// en presente («El sábado pasado llega un cliente y le ofrezco…»).
+const ANCLA_PASADA =
+  /(^|[^\p{L}])(ayer|antier|anoche|una vez|en una ocasi[oó]n|la (semana|quincena) pasada|el (mes|a[ñn]o|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|fin de semana) pasado|hace (un|una|dos|tres|unos|unas|poco|\d+)\s|en (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|temporada|mi (anterior|otro|[uú]ltimo) trabajo)|cuando trabaj(e|é|aba))(?![\p{L}])/iu
+const HIPOTETICA = /(^|[^\p{L}])(la pr[oó]xima vez|si me (pasa|pasara|toca|tocara)|en ese caso)(?![\p{L}])/iu
+// Primera persona del presente («Hablo con él», «le pongo», «y reviso»): al
+// inicio de frase o tras un clítico, «yo», «no» o «y». Sin acento final, para
+// no leer «pidió» o «cambió» como presente.
+const ANTES_DE_PRESENTE = new Set(['yo', 'le', 'les', 'me', 'se', 'te', 'nos', 'no', 'siempre', 'primero', 'luego', 'después', 'despues', 'ahora', 'normalmente', 'también', 'tambien', 'y'])
+const NO_ES_PRESENTE = new Set([
+  'pero', 'como', 'cuando', 'mismo', 'todo', 'algo', 'nada', 'poco', 'tanto', 'cuanto', 'luego', 'claro', 'entonces', 'menos',
+  'dentro', 'sino', 'tampoco', 'mucho', 'primero', 'segundo', 'tercero', 'otro', 'nuevo', 'eso', 'esto', 'nunca', 'solo', 'sólo',
+  'trabajo', 'equipo', 'turno', 'caso', 'tiempo', 'momento', 'servicio', 'pedido', 'producto', 'dinero', 'cambio', 'grupo',
+  'resto', 'menudo', 'modo', 'centro', 'ejemplo', 'proceso', 'plato', 'platillo', 'cuarto', 'medio', 'rato', 'puesto', 'precio',
+  'costo', 'gasto', 'pago', 'cobro', 'conteo', 'inventario', 'apoyo', 'error', 'mundo', 'objetivo', 'motivo', 'ánimo', 'animo',
+  'respeto', 'cuidado',
+])
+
+function hayHechoPropio(respuesta: string): boolean {
+  if (ANCLA_PASADA.test(respuesta)) return true
+  const ws = palabrasDe(respuesta).map((x) => x.w)
+  return ws.some((w, k) => {
+    const x = sinAcento(w)
+    if (PRETERITO_PROPIO.has(x)) return true
+    if (AUX_PERFECTO.has(x) && ws[k + 1] && /(ado|ido|to|cho|so)$/.test(sinAcento(ws[k + 1]))) return true
+    return esPasado(w)
+  })
+}
+
+function hablaDeLoQueHariaOHace(respuesta: string): boolean {
+  if (HIPOTETICA.test(respuesta)) return true
+  return respuesta.split(/(?<=[.!?;:])\s+|\n+/u).some((f) => {
+    const ws = palabrasDe(f).map((x) => x.w)
+    return ws.some((w, k) => {
+      if (esCondicional(w)) {
+        let j = k - 1
+        while (j >= 0 && ENTRE_QUE_Y_VERBO.has(ws[j])) j--
+        if (!(j >= 0 && SUBORDINANTE.has(ws[j]))) return true
+      }
+      return w.length >= 4 && w.endsWith('o') && !NO_ES_PRESENTE.has(w) && (k === 0 || ANTES_DE_PRESENTE.has(ws[k - 1]))
+    })
+  })
+}
+
+/**
+ * La respuesta no cuenta nada que él haya hecho y sí lo que haría o hace
+ * («La próxima vez hablaría…», «Hablo con él en privado…»). Sólo entonces un
+ * relato confirmado pasa a criterio. Pura.
+ */
+export function sinHechoPropio(respuesta: string): boolean {
+  return !hayHechoPropio(respuesta) && hablaDeLoQueHariaOHace(respuesta)
+}
+
 // Palabras que pueden ir entre «que» y el verbo de una subordinada
 // («vi que no acabaríamos», «acordamos cómo llegaría»): ahí el condicional es
 // lo que vio o lo que acordaron, no lo que él haría.
@@ -662,7 +732,8 @@ export async function gradeCompetencias(opts: {
           // lo que haría. Decide la respuesta completa: «junté al equipo…
           // Priorizamos riesgos…» sí cuenta algo hecho (KM C9 P30).
           const resp = conTexto.find((x) => x.q === e.q)!.respuesta
-          if (clase === 'relato' && !cuentaAlgoHecho(resp)) clase = 'criterio'
+          // v2.5 · sólo con evidencia en los dos sentidos (sinHechoPropio).
+          if (clase === 'relato' && sinHechoPropio(resp)) clase = 'criterio'
           // Si la confirmación cambia la clase, la fuerza del primer juicio no
           // se hereda completa: queda como mucho en «suficiente».
           const fuerza: Fuerza = clase !== e.clase && e.fuerza === 'fuerte' ? 'suficiente' : e.fuerza
@@ -673,7 +744,7 @@ export async function gradeCompetencias(opts: {
         r.evidencias.push(
           ...recuperadas.map((e) => {
             const resp = conTexto.find((x) => x.q === e.q)!.respuesta
-            const clase: ClaseEvidencia = e.clase === 'relato' && !cuentaAlgoHecho(resp) ? 'criterio' : e.clase
+            const clase: ClaseEvidencia = e.clase === 'relato' && sinHechoPropio(resp) ? 'criterio' : e.clase
             return { ...e, claseModelo: e.clase, clase }
           })
         )

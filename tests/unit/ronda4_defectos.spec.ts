@@ -18,6 +18,7 @@ import {
   confirmacionValida,
   consolidar,
   cuentaAlgoHecho,
+  sinHechoPropio,
   cuentaAccionHecha,
   dividirMixta,
   esCondicional,
@@ -650,5 +651,38 @@ test.group('cierre de Codex · v3.10/v2.4, segunda pasada', () => {
     const c = r.aiReport.competencias.find((x: any) => x.eje === 'optimismo_bondadoso')!
     assert.equal(c.evidencias[0].clase, 'criterio')
     assert.equal(c.tipoEvidencia, 'solo_criterio_declarado')
+  })
+})
+
+test.group('verificación v2.4 de Codex · D1 veto sin hecho propio (v2.5)', () => {
+  test('no veta relatos en plural, perfecto, imperfecto, sin acentos o en presente histórico', ({ assert }) => {
+    for (const r of [
+      'Ayer resolvimos el faltante y avisamos al gerente.',
+      'He corregido el registro y he pedido ayuda.',
+      'Yo revisaba las cuentas y avisaba al gerente.',
+      // GM C7 P16, sin acentos
+      'un mesero pidió salir en la hora del evento sin relevo le explique la cobertura y busque con él otra hora posible pudo salir al terminar el pico con entrega de su sección',
+      'El sábado pasado llega un cliente molesto, le ofrezco otra mesa y le pido disculpas.',
+      'Reduje demasiado el personal de un domingo y subieron los tiempos. Pediría apoyo.',
+      'Probé la misma revisión en mi recepción y detectamos una diferencia.',
+    ])
+      assert.isFalse(sinHechoPropio(r), r)
+  })
+
+  test('veta lo que haría o hace sin nada hecho por él', ({ assert }) => {
+    for (const r of [
+      'Hablo con él en privado y le pongo la amonestación escrita por la tercera tardanza.',
+      'El equipo estaba bajoneado después de una reserva atrasada. La próxima vez hablaría con el equipo.',
+      'El proveedor me devolvió de más al pagar. La próxima vez regresaría el cambio.',
+      'Cambió el dueño y pidió reportes semanales que antes no hacíamos. Aprendería el formato nuevo.',
+      'Revisaría la cuenta y avisaría al gerente.',
+      'La proxima vez hablaria con el equipo',
+    ])
+      assert.isTrue(sinHechoPropio(r), r)
+  })
+
+  test('sin marca de hipotética ni de presente no veta: decide la confirmación', ({ assert }) => {
+    assert.isFalse(sinHechoPropio('Nunca me ha pasado.'))
+    assert.isFalse(sinHechoPropio(''))
   })
 })

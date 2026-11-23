@@ -53,7 +53,9 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // v3.5 (2026-11-20, DEV): «completo» sólo con partes explícitas de la ficha;
   // alternativas válidas en la confirmación. v3.4 (2026-11-19, ronda 4): perspectiva del puesto, partes obligatorias
   // completas, citas literales y recuperación de citas reformuladas.
-  grader: 'practico-rubrica-v3.10',
+  // v3.11 (2026-11-23, VERIFICACION_V24): frontera alternativa/actualiza en
+  // Hostess P3 y control de recepción en Encargado P3 (ficha, no código).
+  grader: 'practico-rubrica-v3.11',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 
