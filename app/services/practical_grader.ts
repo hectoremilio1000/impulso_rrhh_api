@@ -65,7 +65,9 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // v3.16: la cita de una parte que repite la rúbrica no cuenta (código y prompt).
   // v3.17: la comprobación parte por parte sólo para `partesEscritas` (acciones o
   // datos escritos); las interpretativas, con la confirmación general.
-  grader: 'practico-rubrica-v3.17',
+  // v3.18: la comprobación por partes pregunta si la cita ya verificada dice
+  // cada parte (en contexto); otro fragmento sólo si pertenece a la respuesta.
+  grader: 'practico-rubrica-v3.18',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 

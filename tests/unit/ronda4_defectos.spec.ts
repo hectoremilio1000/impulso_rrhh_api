@@ -840,8 +840,8 @@ test.group('cierre · práctico v3.14 · partes obligatorias con evidencia', () 
   }
 
   test('B1: «lo reconozco» sin documentar no acredita «propia»', async ({ assert }) => {
-    const { q, prompts } = await correr(C3, (n) => (n === 1 ? { presente: true, cita: 'Yo di los $4,500 sin registrar motivo y lo reconozco' } : { presente: false, cita: '' }))
-    assert.isTrue(prompts.some((p) => p.startsWith('Comprueba partes obligatorias')))
+    const { q, prompts } = await correr(C3, (n) => (n === 1 ? { en_cita: true, otra_cita: '' } : { en_cita: false, otra_cita: '' }))
+    assert.isTrue(prompts.some((p) => p.startsWith('Comprueba partes obligatorias') && p.includes('CITA VERIFICADA: "Yo di los $4,500 sin registrar motivo y lo reconozco"')))
     assert.notInclude(q.elementos.map((e: any) => e.id), 'propia')
     const r = (q.elementosRechazados ?? []).find((e: any) => e.id === 'propia')!
     assert.equal(r.defecto, 'incompleto')
@@ -850,29 +850,29 @@ test.group('cierre · práctico v3.14 · partes obligatorias con evidencia', () 
 
   test('con la documentación escrita y citada, sí se acredita', async ({ assert }) => {
     const { q } = await correr(conDoc, (n) =>
-      n === 1 ? { presente: true, cita: 'lo reconozco ante el dueño' } : { presente: true, cita: 'dejo una nota con el motivo en la bitácora sin tocar el registro original' }
+      n === 1 ? { en_cita: true, otra_cita: '' } : { en_cita: false, otra_cita: 'dejo una nota con el motivo en la bitácora sin tocar el registro original' }
     )
     assert.include(q.elementos.map((e: any) => e.id), 'propia')
   })
 
   test('una parte «presente» con cita que no está en la respuesta no cuenta; respuesta inválida falla cerrado', ({ assert }) => {
     const partes = ['a', 'b']
-    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'x', partes: [{ n: 1, presente: true, cita: 'lo reconozco' }, { n: 2, presente: true, cita: 'lo documento en la bitácora' }] }] }, 'x', partes, 'Yo lo reconozco.'), [2])
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'x', partes: [{ n: 1, en_cita: true, otra_cita: '' }, { n: 2, en_cita: false, otra_cita: 'lo documento en la bitácora' }] }] }, 'x', partes, 'Yo lo reconozco.'), [2])
     assert.deepEqual(partesSinEvidencia(null, 'x', partes, 'Yo lo reconozco.'), [1, 2])
   })
 
   test('v3.15: una parte dicha con otras palabras y citada reformulada cuenta (H C7 P1)', ({ assert }) => {
     const resp = 'recibo a los ramírez y los paso a su mesa de 4 a la pareja le explico que calculamos unos 20 minutos para una de 2 si acepta anoto nombre y contacto y actualizo la espera'
-    const v = { elementos: [{ id: 'registra', partes: [{ n: 1, presente: true, cita: 'anoto su nombre' }, { n: 2, presente: true, cita: 'anoto nombre y contacto' }] }] }
+    const v = { elementos: [{ id: 'registra', partes: [{ n: 1, en_cita: false, otra_cita: 'anoto su nombre' }, { n: 2, en_cita: true, otra_cita: '' }] }] }
     assert.deepEqual(partesSinEvidencia(v, 'registra', ['el nombre', 'un dato de contacto'], resp), [])
   })
 
   test('v3.16: una cita copiada de la rúbrica no justifica la parte; una cita del candidato sí (GM C1 P9)', ({ assert }) => {
     const resp = 'Cortesías exceden $8,820; hoy concilio las 12 cancelaciones por $9,850, ocho del mismo usuario, y arqueos sin acusar, reviso costos con cocina.'
     const partes = ['pone esas cancelaciones entre lo primero a revisar', 'las verificará antes de señalar a alguien']
-    const copia = { elementos: [{ id: 'cancelaciones', partes: [{ n: 1, presente: true, cita: 'hoy concilio las 12 cancelaciones por $9,850, ocho del mismo usuario' }, { n: 2, presente: true, cita: 'las verificará antes de señalar a alguien' }] }] }
+    const copia = { elementos: [{ id: 'cancelaciones', partes: [{ n: 1, en_cita: true, otra_cita: '' }, { n: 2, en_cita: false, otra_cita: 'las verificará antes de señalar a alguien' }] }] }
     assert.deepEqual(partesSinEvidencia(copia, 'cancelaciones', partes, resp, 'texto'), [2])
-    const buena = { elementos: [{ id: 'cancelaciones', partes: [{ n: 1, presente: true, cita: 'hoy concilio las 12 cancelaciones por $9,850' }, { n: 2, presente: true, cita: 'y arqueos sin acusar' }] }] }
+    const buena = { elementos: [{ id: 'cancelaciones', partes: [{ n: 1, en_cita: true, otra_cita: '' }, { n: 2, en_cita: false, otra_cita: 'y arqueos sin acusar' }] }] }
     assert.deepEqual(partesSinEvidencia(buena, 'cancelaciones', partes, resp, 'texto'), [])
     assert.isTrue(citaDeLaRubrica('las verificará antes de señalar a alguien', partes, resp))
     assert.isFalse(citaDeLaRubrica('y arqueos sin acusar', partes, resp))
@@ -881,7 +881,7 @@ test.group('cierre · práctico v3.14 · partes obligatorias con evidencia', () 
   })
 
   test('v3.15: el reporte guarda la respuesta por parte', async ({ assert }) => {
-    const { q } = await correr(C3, (n) => (n === 1 ? { presente: true, cita: 'Yo di los $4,500 sin registrar motivo y lo reconozco' } : { presente: false, cita: '' }))
+    const { q } = await correr(C3, (n) => (n === 1 ? { en_cita: true, otra_cita: '' } : { en_cita: false, otra_cita: '' }))
     const pc = (q as any).partesConfirmadas.find((x: any) => x.id === 'propia')
     assert.deepEqual(pc.partes.map((x: any) => x.presente), [true, false])
   })
@@ -924,5 +924,34 @@ test.group('cierre · práctico v3.17 · partes escritas e interpretativas', () 
     const q = r.aiReport.preguntas.find((p: any) => p.q === 9)!
     assert.include(q.elementos.map((e: any) => e.id), 'cancelaciones')
     assert.isFalse(prompts.some((p) => p.startsWith('Comprueba partes obligatorias')))
+  })
+})
+
+test.group('cierre · práctico v3.18 · la cita verificada primero', () => {
+  const C7 = 'nómina $117 600 frente a $117 500 solo $100 más contra la semana anterior mantener $117 500 con la venta actual lleva el indicador de 26 29 % a 27 98 % 1 69 puntos por menor venta y 0 024 puntos por mayor gasto hasta 28 % con cocina y barra checo rendimientos y conteos con piso'
+  const costo = ['al menos una causa concreta del costo: conteo, precios de compra, porciones, mermas o mezcla de venta']
+  const nomina = ['al menos una cifra que separe el efecto de la venta del efecto del gasto en la nómina']
+  test('GM C7 P9: la cita verificada dice la parte → cuenta, sin volver a buscar ni copiar', ({ assert }) => {
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'costo', partes: [{ n: 1, en_cita: true, otra_cita: '' }] }] }, 'costo', costo, C7), [])
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'nomina', partes: [{ n: 1, en_cita: true, otra_cita: '' }] }] }, 'nomina', nomina, C7), [])
+  })
+  test('otro fragmento copiado de la rúbrica o ajeno a la respuesta no cuenta; uno del candidato sí', ({ assert }) => {
+    const rub = 'contra la semana anterior, el gasto casi no cambió, $117,600 contra $117,500, y el porcentaje subió porque bajó la venta'
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'nomina', partes: [{ n: 1, en_cita: false, otra_cita: rub }] }] }, 'nomina', nomina, C7, rub + '; o contra la meta…'), [1])
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'costo', partes: [{ n: 1, en_cita: false, otra_cita: 'reviso las mermas del almacén con el chef' }] }] }, 'costo', costo, C7), [1])
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'costo', partes: [{ n: 1, en_cita: false, otra_cita: 'checo rendimientos y conteos con piso' }] }] }, 'costo', costo, C7), [])
+  })
+  test('control B1 sin modelo: «lo reconozco» no prueba haberlo documentado', ({ assert }) => {
+    const partes = ['reconoce ante el dueño la cortesía de $4,500 que autorizó', 'la documenta sin alterar el registro original']
+    const r = 'Yo di los $4,500 sin registrar motivo y lo reconozco; revisaría con caja las cancelaciones.'
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'propia', partes: [{ n: 1, en_cita: true, otra_cita: '' }, { n: 2, en_cita: false, otra_cita: '' }] }] }, 'propia', partes, r), [2])
+    // Aunque el modelo dijera «está en otro lado», sin fragmento de la respuesta no cuenta.
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'propia', partes: [{ n: 1, en_cita: true, otra_cita: '' }, { n: 2, en_cita: false, otra_cita: 'la documento en la bitácora' }] }] }, 'propia', partes, r), [2])
+  })
+  test('controles de Hostess y Encargado: partes dichas en la cita verificada cuentan', ({ assert }) => {
+    const h = 'si acepta anoto nombre y contacto y actualizo la espera'
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'registra', partes: [{ n: 1, en_cita: true, otra_cita: '' }, { n: 2, en_cita: true, otra_cita: '' }] }] }, 'registra', ['el nombre', 'un dato de contacto o cómo les avisará'], h), [])
+    const k = 'no dejamos entrar ni reanudamos hasta que personal competente descarte la fuga y autorice el uso'
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'reabre', partes: [{ n: 1, en_cita: true, otra_cita: '' }] }] }, 'reabre', ['quien confirma que no hay fuga es un técnico, la compañía de gas o personal autorizado, no su propia impresión'], k), [])
   })
 })
