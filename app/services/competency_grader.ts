@@ -44,7 +44,9 @@ export const COMPETENCY_GRADING_VERSION = {
   // cerrada sólo en esos ejes); si no, «Por verificar».
   // v2.7: «Media» exige cumplir su rúbrica; lo débil sin señal baja ni media es
   // insuficiente y no cuenta («Por verificar» si no queda otra evidencia).
-  grader: 'competencias-evidencia-v2.7',
+  // v2.8: un reintento si esa pregunta cerrada responde inválido; con sólo
+  // evidencia insuficiente el tipo es el declarado, no «sin evidencia».
+  grader: 'competencias-evidencia-v2.8',
   agregacion: 'por-eje-sin-global-v1',
   model: process.env.OPENAI_MODEL_PSYCH || GPT_MODEL_ESCALADO,
 } as const
@@ -710,7 +712,18 @@ export function nivelConSenalBaja(
   // Una cita débil sin confirmar no sostiene ningún nivel (falla cerrado).
   const sinConf = new Set(sinConfirmar)
   const cuentan = cuentanParaNivel(evidencias).filter((e) => !(e.fuerza === 'debil' && e.senalBaja !== true && sinConf.has(e.q)))
-  const c = consolidar(preguntas, cuentan)
+  const c0 = consolidar(preguntas, cuentan)
+  // v2.8: si sólo queda evidencia insuficiente, no es «sin evidencia»: hay
+  // conducta o criterio declarado, demasiado débil para un nivel.
+  const insuf = evidencias.filter((e) => e.confirmada && e.insuficiente)
+  const c =
+    c0.tipoEvidencia === 'sin_evidencia' && insuf.length
+      ? {
+          nivel: null,
+          tipoEvidencia: (insuf.some((e) => e.clase === 'relato') ? 'conducta_relatada' : 'solo_criterio_declarado') as TipoEvidenciaEje,
+          faltaVerificar: ['Por verificar: la evidencia no alcanza la rúbrica de «Media» ni muestra una señal baja; pedir en la entrevista un caso real.'],
+        }
+      : c0
   const notas: string[] = []
   if (sinConfirmar.length)
     notas.push(`Citas débiles sin confirmar si muestran una señal baja o media (P${sinConfirmar.join(', P')}): no cuentan para el nivel; revisarlas a mano.`)
@@ -917,7 +930,16 @@ export async function gradeCompetencias(opts: {
             buildPromptSenalBaja(eje, revisar.map(({ e, i }) => ({ i, q: e.q, pregunta: conTexto.find((x) => x.q === e.q)!.p.texto, respuesta: conTexto.find((x) => x.q === e.q)!.respuesta, cita: e.cita }))),
             { model, maxTokens: 800, onMeta }
           )
-          const sb = aplicarSenalBaja(out.evidencias, leerConfirmaciones(v, revisar.map((x) => x.i)), revisar.map((x) => x.i))
+          let sb = aplicarSenalBaja(out.evidencias, leerConfirmaciones(v, revisar.map((x) => x.i)), revisar.map((x) => x.i))
+          // v2.8 · Un reintento sólo para las citas sin respuesta válida (como la confirmación general).
+          const otra = revisar.filter(({ e }) => sb.sinConfirmar.includes(e.q))
+          if (otra.length) {
+            const v2 = await llm(
+              buildPromptSenalBaja(eje, otra.map(({ e, i }) => ({ i, q: e.q, pregunta: conTexto.find((x) => x.q === e.q)!.p.texto, respuesta: conTexto.find((x) => x.q === e.q)!.respuesta, cita: e.cita }))),
+              { model, maxTokens: 800, onMeta }
+            )
+            sb = aplicarSenalBaja(sb.evidencias, leerConfirmaciones(v2, otra.map((x) => x.i)), otra.map((x) => x.i))
+          }
           out.evidencias = sb.evidencias
           sinConf = sb.sinConfirmar
         }

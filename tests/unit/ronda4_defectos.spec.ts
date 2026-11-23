@@ -738,6 +738,16 @@ test.group('cierre · competencias v2.6 · «Baja» exige una señal negativa', 
     assert.isTrue(c.evidencias.every((e: any) => e.fuerza === 'debil'))
     assert.isTrue(c.evidencias.filter((e: any) => e.confirmada).every((e: any) => e.insuficiente))
     assert.isTrue(c.faltaVerificar.some((f: string) => /demasiado débil para «Media»/.test(f)))
+    // v2.8: hay criterio declarado, insuficiente: no se reporta como «sin evidencia».
+    assert.equal(c.tipoEvidencia, 'conducta_relatada')
+    assert.isFalse(c.faltaVerificar.some((f: string) => /^Sin evidencia en el examen/.test(f)))
+  })
+
+  test('v2.8: una respuesta inválida se reintenta una vez antes de fallar cerrado', async ({ assert }) => {
+    let n = 0
+    const c = await eje(fake(() => (++n === 1 ? {} : { pertinente: true, senal_baja: false, cumple_media: true })))
+    assert.isAbove(n, 1)
+    assert.equal(c.nivel, 2)
   })
 
   test('con una señal baja confirmada el nivel sí es «Baja»', async ({ assert }) => {
