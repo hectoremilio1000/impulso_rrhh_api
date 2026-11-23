@@ -71,6 +71,8 @@ export default class ExamEstimarCosto extends BaseCommand {
           return { citas: [...prompt.matchAll(/clave "([^"]+)"/g)].map((m) => ({ clave: m[1], literal: literal(resp) })) }
         case 'practico:confirmar_error':
           return { confirma: false }
+        case 'practico:confirmar_partes':
+          return { elementos: [] }
         case 'practico:confirmar_elementos':
           return {
             elementos: [...prompt.matchAll(/- id "([^"]+)"/g)].map((m) => ({
@@ -89,11 +91,14 @@ export default class ExamEstimarCosto extends BaseCommand {
             alerta: qs.length ? { presente: true, q: qs[0], cita: literal(rs[0] ?? ''), conducta: 'c' } : { presente: false },
           }
         }
-        case 'competencias:relatos_omitidos': {
-          const qs = numeros(prompt)
-          const rs = respuestas(prompt)
-          return { evidencias: qs.map((q, i) => ({ q, cita: literal(rs[i] ?? '', 4), clase: 'relato', fuerza: 'fuerte', senal: 's' })) }
-        }
+        case 'competencias:frases_sin_juzgar':
+          // Peor caso: toda frase vuelve como relato fuerte (más citas que confirmar).
+          return {
+            frases: [...prompt.matchAll(/- n (\d+)/g)].map((m) => ({ n: Number(m[1]), clase: 'relato', fuerza: 'fuerte', senal: 's' })),
+          }
+        case 'competencias:autoconciencia':
+        case 'competencias:senal_baja':
+          return { citas: [] }
         case 'competencias:confirmar_citas': {
           // Primera confirmación inválida → reintento (peor caso).
           const k = prompt.slice(0, 400)

@@ -102,6 +102,7 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
             texto: 'Anota a la pareja en la lista de espera con nombre y un dato de contacto (o cómo les avisará)',
             // v2.3: el elemento existe para esos datos; «la anoto» sin ellos no basta.
             partes: ['el nombre', 'un dato de contacto o cómo les avisará'],
+            partesEscritas: ['el nombre', 'un dato de contacto o cómo les avisará'],
           },
         ],
         minimoCorrecta: 4,
@@ -146,15 +147,26 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
           },
           {
             id: 'alternativa',
-            texto: 'Ofrece algo mientras esperan o en lugar de esperar (barra, mesa más chica para empezar si cabe, regresar a una hora)',
+            // v3.11 (VERIFICACION_V24 D2, H C6 P3): «esperar fuera con aviso» es
+            // una alternativa, no `actualiza`; sólo «esperar» no lo es (C3).
+            texto:
+              'Ofrece algo mientras esperan o en lugar de esperar (barra, mesa más chica para empezar si cabe, regresar a una hora, esperar fuera o en otro lugar con aviso cuando su mesa esté lista); ofrecerla sujeta a la política del lugar también cuenta. Sólo invitarlos a esperar no es una alternativa',
           },
           {
             id: 'lista',
             texto: 'Si deciden esperar, los anota en la lista con nombre, número de personas y contacto',
+            // v2.3 (cierre): Codex acredita con un solo dato (C5: «tomo su contacto»),
+            // no «registro que hay un grupo esperando» (contraste V2-01−).
+            partes: ['al menos un dato para identificarlos o avisarles: su nombre o un contacto'],
+            partesEscritas: ['al menos un dato para identificarlos o avisarles: su nombre o un contacto'],
+            // Cierre v3.10 (H C6 P3): «registro su decisión y contacto» se
+            // rechazaba como incompleto teniendo el contacto.
+            completoSi: '(nombre|contacto|tel[eé]fono|celular|n[uú]mero de (tel|cel)|whats)',
           },
           {
             id: 'actualiza',
-            texto: 'Se compromete a avisarles si el tiempo cambia (o les da seguimiento a mitad de la espera)',
+            texto:
+              'Se compromete a avisarles si el tiempo cambia (o les da seguimiento a mitad de la espera); avisarles sólo cuando su mesa esté lista no es esto, es la alternativa de esperar fuera',
           },
         ],
         minimoCorrecta: 3,
@@ -572,6 +584,7 @@ export const EXAMEN_HOSTESS: ExamenPuesto = {
             texto: 'Los anota en la libreta de objetos olvidados (qué, en qué mesa, a qué hora y quién lo encontró)',
             // v2.3: son los datos del registro, no opciones (revisión Codex r4).
             partes: ['qué objetos son', 'en qué mesa estaban', 'a qué hora', 'quién los encontró'],
+            partesEscritas: ['qué objetos son', 'en qué mesa estaban', 'a qué hora', 'quién los encontró'],
           },
           {
             id: 'verifica',

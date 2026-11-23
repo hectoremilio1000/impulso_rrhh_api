@@ -40,12 +40,34 @@ const RUBRICA_POR_BANCO = {
 
 /** Práctico por rúbrica del puesto (catálogo 2026-11-16): todos los puestos. */
 export const PRACTICAL_GRADING_VERSION_CATALOGO = {
+  // v3.10 (2026-11-22, cierre de Codex): la negación se decide en la cláusula
+  // de la acción y «no X sin Y» afirma; una cita que sólo dice para qué no
+  // acredita; Encargado P8 reabrir por impresión propia es error crítico;
+  // Encargado P12 «escrito» pide el soporte.
+  // v3.9 (2026-11-20, cierre): partes en lista y reabre; acción clave en conteo;
+  // con error crítico también se confirman los elementos.
+  // v3.8 (2026-11-20, cierre): «no … hasta que …» afirma; un elemento con su
+  // propia condición no es «condicionada»; partes en precio y tortilla.
   // v3.7 (2026-11-20): una cita que niega la acción no la acredita.
   // v3.6 (2026-11-20): ids del modelo con acento o eñe se reconocen.
   // v3.5 (2026-11-20, DEV): «completo» sólo con partes explícitas de la ficha;
   // alternativas válidas en la confirmación. v3.4 (2026-11-19, ronda 4): perspectiva del puesto, partes obligatorias
   // completas, citas literales y recuperación de citas reformuladas.
-  grader: 'practico-rubrica-v3.7',
+  // v3.11 (2026-11-23, VERIFICACION_V24): frontera alternativa/actualiza en
+  // Hostess P3 y control de recepción en Encargado P3 (ficha, no código).
+  // v3.12 (2026-11-23, cierre): cita sin tramo literal se ancla a su oración
+  // (Gerente C6 P13); error crítico «prueba con flama» en Encargado P8.
+  // v3.13 (cierre): partes obligatorias en los elementos compuestos de Gerente P9.
+  // v3.14 (cierre, VERIFICACION_FINAL_V28 B1): cada parte obligatoria de un
+  // elemento acreditado necesita su propio fragmento literal.
+  // v3.15: esa pregunta usa la misma tolerancia de redacción que la confirmación,
+  // la cita de cada parte puede anclarse a su oración y se guarda cada respuesta.
+  // v3.16: la cita de una parte que repite la rúbrica no cuenta (código y prompt).
+  // v3.17: la comprobación parte por parte sólo para `partesEscritas` (acciones o
+  // datos escritos); las interpretativas, con la confirmación general.
+  // v3.18: la comprobación por partes pregunta si la cita ya verificada dice
+  // cada parte (en contexto); otro fragmento sólo si pertenece a la respuesta.
+  grader: 'practico-rubrica-v3.18',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 

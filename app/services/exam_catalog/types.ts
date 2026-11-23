@@ -41,6 +41,27 @@ export type Elemento = {
    * esos datos; sin `partes`, se exige la acción, no cada detalle del texto.
    */
   partes?: string[]
+  /**
+   * v3.17 · Subconjunto de `partes` que son ACCIONES O DATOS ESCRITOS: algo que
+   * el candidato debe decir que hace o anota (documentar, registrar el nombre o
+   * el contacto, avisar al gerente, quién confirma que no hay fuga, una causa
+   * nombrada, una cifra, una fecha). Cada una necesita respaldo literal en la
+   * respuesta. Las partes interpretativas (priorizar, verificar antes de
+   * señalar, separar hechos de hipótesis) las juzga la confirmación general.
+   */
+  partesEscritas?: string[]
+  /**
+   * Expresión (sin barras, insensible a mayúsculas) que la cita debe contener
+   * para acreditar el elemento. Sólo para acciones de vocabulario inequívoco
+   * («conteo»): la decide el código, no el modelo.
+   */
+  requiere?: string
+  /**
+   * Expresión que, si la cita la contiene, cumple las `partes` sin depender
+   * del modelo (la parte se puede verificar literalmente: «nombre o
+   * contacto»). Sólo afloja «incompleto»; los demás defectos se revisan igual.
+   */
+  completoSi?: string
 }
 
 export type Dimension = { id: string; nombre: string; peso: number }

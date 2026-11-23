@@ -118,6 +118,9 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
             id: 'tortilla',
             texto:
               'Llama al proveedor de tortilla por una hora real y prepara un plan B (avisar a piso, o comprar con otro proveedor autorizado dentro de lo que puede autorizar o con el visto bueno del gerente)',
+            // v2.3 (cierre): «llamo por las tortillas» no dice hora real ni plan B.
+            partes: ['pide al proveedor una hora real de entrega', 'un plan B si no llega'],
+            partesEscritas: ['pide al proveedor una hora real de entrega', 'un plan B si no llega'],
           },
           {
             id: 'bitacora',
@@ -221,8 +224,11 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
           },
           {
             id: 'proceso',
+            // v3.11 (VERIFICACION_V24 D3, KM C6 P3): basta una medida de control;
+            // Codex lo acredita sin capacitación (C1, C5, C6) y no por revisar
+            // remisiones con quien recibió (C3, C4).
             texto:
-              'Fija cómo se recibe en adelante (quién puede recibir, pesar siempre antes de firmar, anotar diferencias) y capacita al cocinero que firmó',
+              'Fija un control de recepción que corrija el sistema, no sólo la entrega de hoy: quién puede recibir, recibir entre dos personas o separar quién pesa de quién coteja la nota, pesar antes de firmar como regla para las entregas siguientes, asentar diferencias, o capacitar al cocinero que firmó. Basta una medida de este tipo; revisar las remisiones anteriores con quien recibió no es fijar el proceso',
           },
           {
             id: 'reclama',
@@ -421,6 +427,9 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
             id: 'reabre',
             texto:
               'Solo reabre el gas cuando un técnico o la compañía confirman que no hay fuga, y reenciende con procedimiento',
+            // v2.3 (cierre): «lo abro cuando yo considero que no hay fuga» no cumple (contraste V2-07−).
+            partes: ['quien confirma que no hay fuga es un técnico, la compañía de gas o personal autorizado, no su propia impresión'],
+            partesEscritas: ['quien confirma que no hay fuga es un técnico, la compañía de gas o personal autorizado, no su propia impresión'],
           },
         ],
         minimoCorrecta: 4,
@@ -436,6 +445,22 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
           {
             id: 'sigue',
             texto: 'Mantiene al equipo cocinando en el área con olor a gas',
+          },
+          // Cierre de Codex (V2-07−/V2-08−): reabrir porque «ya no huele» o
+          // porque él lo considera es el riesgo real; la ficha ya pedía que lo
+          // confirme un técnico o la compañía, no su impresión.
+          {
+            id: 'reabre_por_su_cuenta',
+            texto:
+              'Reabre el gas o reenciende por su propia impresión (cuando ya no percibe el olor o cuando él considera que no hay fuga), sin que un técnico, la compañía de gas o personal autorizado confirme que no hay fuga',
+          },
+          // v3.12 (cierre, Encargado C5 P8): buscar la fuga con fuego es una
+          // fuente de ignición en sí misma, distinta de reencender; sin este
+          // error el modelo la pegaba a `reabre_por_su_cuenta`.
+          {
+            id: 'prueba_con_flama',
+            texto:
+              'Busca o comprueba la fuga con una flama, un cerillo, un encendedor o algo que haga chispa (en vez de alejarse y esperar a un técnico o a la compañía de gas)',
           },
         ],
       },
@@ -605,6 +630,9 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
           {
             id: 'conteo',
             texto: 'Parte de un conteo físico de lo que hay, no de memoria',
+            // v2.3 (cierre): «resto inventario utilizable» no dice que cuente; el
+            // modelo lo aceptó en una corrida y lo rechazó en otra.
+            requiere: '\\b(cont|cuent|recuent|recont|f[ií]sic|existencias|pes[oa])',
           },
           {
             id: 'cantidades',
@@ -620,13 +648,22 @@ export const EXAMEN_KITCHEN_MANAGER: ExamenPuesto = {
             id: 'precio',
             texto:
               'Avisa al gerente del aumento con su efecto en el costo del evento y de la carta, y deja la decisión de precio o de proveedor a quien le toca',
+            // v2.3 (cierre): elemento compuesto; cotizar o pedir autorización por el tope no basta.
+            partes: ['avisa al gerente del aumento', 'el efecto del aumento en el costo (del evento o de la carta)'],
+            partesEscritas: ['avisa al gerente del aumento', 'el efecto del aumento en el costo (del evento o de la carta)'],
           },
           {
             id: 'tope',
             texto:
               'Pasa al gerente para su autorización lo que rebase $3,000 (por ejemplo, el pedido completo o la compra del evento) y solo autoriza él lo que queda dentro del tope',
           },
-          { id: 'escrito', texto: 'Deja el pedido por escrito' },
+          {
+            id: 'escrito',
+            texto: 'Deja el pedido por escrito',
+            // Cierre de Codex (KM C7/C9 P12): «confirmo cantidades fechas y
+            // recepción» no dice que quede por escrito.
+            requiere: '(escri|anot|regist|bit[aá]cora|formato|hoja|nota\\b|papel|correo|mensaje|whats|sistema|orden de compra|apunt|document|libreta|cuaderno|plataforma|archivo|excel|pdf)',
+          },
         ],
         minimoCorrecta: 4,
         nucleo: ['cantidades'],

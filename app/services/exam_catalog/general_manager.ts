@@ -286,15 +286,23 @@ export const EXAMEN_GENERAL_MANAGER: ExamenPuesto = {
             id: 'cancelaciones',
             texto:
               'Pone las 8 cancelaciones después de cobrar del mismo usuario entre lo primero a revisar y dice que las verificará antes de señalar a alguien',
+            // v3.13 (cierre, Gerente C3 P9): elementos compuestos de P9 con sus
+            // partes declaradas; sin ellas la confirmación las leía como ejemplos.
+            // v3.17: ambas partes son interpretativas (priorizar, verificar antes de señalar): sin partesEscritas.
+            partes: ['pone esas cancelaciones entre lo primero a revisar', 'las verificará antes de señalar a alguien'],
           },
           {
             id: 'cortesias',
             texto: 'Revisa quién autorizó cada cortesía y con qué motivo',
+            partes: ['quién autorizó cada cortesía', 'con qué motivo'],
+            partesEscritas: ['quién autorizó cada cortesía', 'con qué motivo'],
           },
           {
             id: 'costo',
             texto:
               'Revisa el costo con el chef por al menos una causa concreta (conteo, precios de compra, porciones, mermas o mezcla de venta)',
+            partes: ['al menos una causa concreta del costo: conteo, precios de compra, porciones, mermas o mezcla de venta'],
+            partesEscritas: ['al menos una causa concreta del costo: conteo, precios de compra, porciones, mermas o mezcla de venta'],
           },
           {
             id: 'nomina',
@@ -305,15 +313,22 @@ export const EXAMEN_GENERAL_MANAGER: ExamenPuesto = {
             // y ~1.1 por el gasto ($5,100 sobre $112,500 = 25 % × 450,000).
             texto:
               'Separa con al menos una cifra el efecto de la venta del efecto del gasto en la nómina. Vale cualquiera de dos lecturas: contra la semana anterior, el gasto casi no cambió, $117,600 contra $117,500, y el porcentaje subió porque bajó la venta; o contra la meta, con la venta de la meta la nómina sería alrededor de 26.1 %, 117,600 ÷ 450,000, así que cerca de 1.9 puntos vienen de la venta y cerca de 1.1 del gasto, unos $5,100 sobre los $112,500 de la meta. Solo nombrar el 28 % o el exceso en pesos no basta',
+            partes: ['al menos una cifra que separe el efecto de la venta del efecto del gasto en la nómina'],
+            partesEscritas: ['al menos una cifra que separe el efecto de la venta del efecto del gasto en la nómina'],
           },
           {
             id: 'propia',
             texto:
               'Reconoce ante el dueño la cortesía de $4,500 que él autorizó sin motivo, que excede su tope por mesa, y la documenta sin alterar el registro original',
+            partes: ['reconoce ante el dueño la cortesía de $4,500 que autorizó', 'la documenta sin alterar el registro original'],
+            partesEscritas: ['reconoce ante el dueño la cortesía de $4,500 que autorizó', 'la documenta sin alterar el registro original'],
           },
           {
             id: 'hechos',
             texto: 'Separa lo que ya sabe de lo que todavía es hipótesis y pone fecha a lo que revisará',
+            partes: ['separa lo que ya sabe de lo que todavía es hipótesis', 'pone fecha a lo que revisará'],
+            // v3.17: «separar hechos de hipótesis» es interpretativa; la fecha es un dato escrito.
+            partesEscritas: ['pone fecha a lo que revisará'],
           },
         ],
         minimoCorrecta: 4,
