@@ -136,6 +136,7 @@ export function etapaDePrompt(prompt: string, forzada?: string): string {
   if (prompt.startsWith('Eres evaluador técnico de restaurantes')) return 'practico:extraccion'
   if (prompt.startsWith('Revisa si cada frase de una respuesta de examen')) return 'practico:confirmar_elementos'
   if (prompt.startsWith('Revisa si una respuesta de examen describe una MALA PRÁCTICA')) return 'practico:confirmar_error'
+  if (prompt.startsWith('Comprueba partes obligatorias')) return 'practico:confirmar_partes'
   if (/copia TEXTUALMENTE/.test(prompt) && /"citas"/.test(prompt)) return 'practico:recuperar_citas'
   if (prompt.includes('no se extrajo ningún RELATO')) return 'competencias:relatos_omitidos'
   if (prompt.includes('Estas frases del candidato no se evaluaron')) return 'competencias:frases_sin_juzgar'

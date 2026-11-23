@@ -58,7 +58,9 @@ export const PRACTICAL_GRADING_VERSION_CATALOGO = {
   // v3.12 (2026-11-23, cierre): cita sin tramo literal se ancla a su oración
   // (Gerente C6 P13); error crítico «prueba con flama» en Encargado P8.
   // v3.13 (cierre): partes obligatorias en los elementos compuestos de Gerente P9.
-  grader: 'practico-rubrica-v3.13',
+  // v3.14 (cierre, VERIFICACION_FINAL_V28 B1): cada parte obligatoria de un
+  // elemento acreditado necesita su propio fragmento literal.
+  grader: 'practico-rubrica-v3.14',
   model: PRACTICAL_GRADING_VERSION_SUBGERENTE.model,
 } as const
 

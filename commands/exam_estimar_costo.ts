@@ -71,6 +71,8 @@ export default class ExamEstimarCosto extends BaseCommand {
           return { citas: [...prompt.matchAll(/clave "([^"]+)"/g)].map((m) => ({ clave: m[1], literal: literal(resp) })) }
         case 'practico:confirmar_error':
           return { confirma: false }
+        case 'practico:confirmar_partes':
+          return { elementos: [] }
         case 'practico:confirmar_elementos':
           return {
             elementos: [...prompt.matchAll(/- id "([^"]+)"/g)].map((m) => ({

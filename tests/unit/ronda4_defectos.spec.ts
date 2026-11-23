@@ -12,6 +12,7 @@ import {
   defectoDelElemento,
   elementoAdmiteEscalar,
   gradeConRubrica,
+  partesSinEvidencia,
 } from '#services/practical_rubric_grader'
 import {
   aplicarAutoconciencia,
@@ -814,5 +815,48 @@ test.group('cierre · práctico v3.12', () => {
   test('Encargado P8 tiene el error crítico «prueba con flama»', ({ assert }) => {
     const p8 = CATALOGO.kitchen_manager.practico.preguntas.find((p: any) => p.q === 8) as any
     assert.isTrue(p8.erroresCriticos.some((e: any) => e.id === 'prueba_con_flama'))
+  })
+})
+
+test.group('cierre · práctico v3.14 · partes obligatorias con evidencia', () => {
+  const GM = CATALOGO.general_manager
+  const P9 = preguntasAbiertas(GM).find((p) => p.q === 9)!
+  const BANCO = enunciadosPractico(GM)
+  const C3 = 'La venta quedó baja y el costo alto; la nómina fue casi igual que la semana anterior, por eso la caída de venta pesa mucho en el porcentaje. Yo di los $4,500 sin registrar motivo y lo reconozco; revisaría con caja las cancelaciones y con cocina el costo.'
+  const conDoc = 'Yo di los $4,500 sin registrar motivo y lo reconozco ante el dueño; dejo una nota con el motivo en la bitácora sin tocar el registro original.'
+  const correr = async (resp: string, partes: (n: number) => any) => {
+    const prompts: string[] = []
+    const llm = async (prompt: string) => {
+      prompts.push(prompt)
+      if (prompt.startsWith('Comprueba partes obligatorias')) return { elementos: [{ id: 'propia', partes: [1, 2].map((n) => ({ n, ...partes(n) })) }] }
+      if (prompt.includes('ELEMENTOS ACREDITADOS'))
+        return { elementos: [{ id: 'propia', completo: true, hace: true, generica: false, solo_lo_suyo: false, delega: false, condicionada: false }] }
+      return { elementos: [{ id: 'propia', presente: true, cita: 'Yo di los $4,500 sin registrar motivo y lo reconozco' }], errores: [] }
+    }
+    const answers = Object.fromEntries(BANCO.map((t, i) => [`q${i + 1}`, { question: t, answer: i === 8 ? resp : '' }]))
+    const r = await gradeConRubrica({ rol: 'Gerente', rubrica: [P9], answers, version: {}, passThreshold: 70, preguntasBanco: BANCO, perspectiva: 'puesto', sinDecisionAutomatica: true, llm })
+    return { q: r.aiReport.preguntas.find((p: any) => p.q === 9)!, prompts }
+  }
+
+  test('B1: «lo reconozco» sin documentar no acredita «propia»', async ({ assert }) => {
+    const { q, prompts } = await correr(C3, (n) => (n === 1 ? { presente: true, cita: 'Yo di los $4,500 sin registrar motivo y lo reconozco' } : { presente: false, cita: '' }))
+    assert.isTrue(prompts.some((p) => p.startsWith('Comprueba partes obligatorias')))
+    assert.notInclude(q.elementos.map((e: any) => e.id), 'propia')
+    const r = (q.elementosRechazados ?? []).find((e: any) => e.id === 'propia')!
+    assert.equal(r.defecto, 'incompleto')
+    assert.match(String(r.motivo), /documenta/)
+  })
+
+  test('con la documentación escrita y citada, sí se acredita', async ({ assert }) => {
+    const { q } = await correr(conDoc, (n) =>
+      n === 1 ? { presente: true, cita: 'lo reconozco ante el dueño' } : { presente: true, cita: 'dejo una nota con el motivo en la bitácora sin tocar el registro original' }
+    )
+    assert.include(q.elementos.map((e: any) => e.id), 'propia')
+  })
+
+  test('una parte «presente» con cita que no está en la respuesta no cuenta; respuesta inválida falla cerrado', ({ assert }) => {
+    const partes = ['a', 'b']
+    assert.deepEqual(partesSinEvidencia({ elementos: [{ id: 'x', partes: [{ n: 1, presente: true, cita: 'lo reconozco' }, { n: 2, presente: true, cita: 'lo documento en la bitácora' }] }] }, 'x', partes, 'Yo lo reconozco.'), [2])
+    assert.deepEqual(partesSinEvidencia(null, 'x', partes, 'Yo lo reconozco.'), [1, 2])
   })
 })
